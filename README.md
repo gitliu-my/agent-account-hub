@@ -44,7 +44,21 @@
 
 ## 安装
 
-建议在虚拟环境里安装:
+推荐直接用 `pipx` 安装:
+
+```bash
+pipx install git+https://github.com/gitliu-my/codex-account-hub.git
+```
+
+安装完成后可以直接运行:
+
+```bash
+codex-account-hub serve
+codex-account-hub tray
+codex-account-hub list
+```
+
+如果你是在本地开发，建议在虚拟环境里安装:
 
 ```bash
 python3 -m venv .venv
@@ -57,7 +71,28 @@ python3 -m pip install -e .
 
 ```bash
 python3 -m pip install py2app
+python3 setup.py py2app
 ```
+
+## 推荐的分发方式
+
+如果目标是“给别人一条命令就能安装”，我推荐这条主路径:
+
+- `pipx install git+https://github.com/gitliu-my/codex-account-hub.git`
+
+原因:
+
+- 这是 Python 项目，不适合强行套 `npm/npx`
+- `pipx` 会隔离依赖，不容易污染用户环境
+- 已经有 `codex-account-hub` 命令入口，天然适配
+- 升级也简单: `pipx upgrade codex-account-hub`
+
+如果目标是“像标准桌面软件那样分发”，更合理的第二层方案是:
+
+- 在 GitHub Releases 上传 `Codex Account Hub.app.zip`
+- 后续再补一个 Homebrew Cask
+
+不建议把主安装方式做成 `curl | bash`。
 
 ## 使用
 
