@@ -510,25 +510,72 @@ class AuthHub:
     def clear_slot(self, slot_id: str) -> dict[str, Any]:
         return self.delete_account(slot_id)
 
+    def sync_current_account_snapshot(self) -> dict[str, Any]:
+        source = self.paths.active_auth_path
+        result = {
+            "account_id": None,
+            "status": "not_saved",
+            "updated": False,
+        }
+
+        if not source.is_file():
+            result["status"] = "missing"
+            return result
+
+        current_summary = build_auth_summary(source)
+        if current_summary.get("status") != "ready":
+            result["status"] = "invalid"
+            return result
+
+        current_identity = auth_identity_key(current_summary)
+        if not current_identity:
+            result["status"] = "unidentifiable"
+            return result
+
+        account_id = self.find_account_id_by_identity(current_identity)
+        if not account_id:
+            return result
+
+        result["account_id"] = account_id
+        snapshot_hash = sha256_file(self.account_auth_path(account_id))
+        current_hash = current_summary.get("hash")
+        if snapshot_hash and current_hash and snapshot_hash == current_hash:
+            result["status"] = "up_to_date"
+            return result
+
+        self._write_auth_snapshot(source, account_id, allow_create=False)
+        result["status"] = "updated"
+        result["updated"] = True
+        return result
+
     def current_account_id(self) -> str | None:
         current_hash = sha256_file(self.paths.active_auth_path)
-        if not current_hash:
+        if current_hash:
+            for account in self.load_state()["accounts"]:
+                account_hash = sha256_file(self.account_auth_path(account["id"]))
+                if account_hash and account_hash == current_hash:
+                    return str(account["id"])
+
+        current_summary = build_auth_summary(self.paths.active_auth_path)
+        current_identity = auth_identity_key(current_summary)
+        if not current_identity:
             return None
-        for account in self.load_state()["accounts"]:
-            account_hash = sha256_file(self.account_auth_path(account["id"]))
-            if account_hash and account_hash == current_hash:
-                return str(account["id"])
-        return None
+        return self.find_account_id_by_identity(current_identity)
 
     def current_slot_id(self) -> str | None:
         return self.current_account_id()
 
-    def current_overview(self) -> dict[str, Any]:
+    def current_overview(self, sync_result: dict[str, Any] | None = None) -> dict[str, Any]:
+        if sync_result is None:
+            sync_result = self.sync_current_account_snapshot()
         current = build_auth_summary(self.paths.active_auth_path)
         matched_account_id = self.current_account_id()
         current["matched_account_id"] = matched_account_id
         current["matched_slot_id"] = matched_account_id
         current["matched_account_label"] = self.account_label(matched_account_id)
+        current["snapshot_sync_status"] = sync_result.get("status")
+        current["snapshot_sync_updated"] = bool(sync_result.get("updated"))
+        current["snapshot_sync_account_id"] = sync_result.get("account_id") or matched_account_id
         return current
 
     def account_label(self, account_id: str | None) -> str | None:
@@ -554,6 +601,7 @@ class AuthHub:
         return self.account_overview(slot_id)
 
     def overview(self) -> dict[str, Any]:
+        sync_result = self.sync_current_account_snapshot()
         current_hash = sha256_file(self.paths.active_auth_path)
         accounts = []
         for account in self.load_state()["accounts"]:
@@ -568,7 +616,7 @@ class AuthHub:
             )
         return {
             "active_auth_path": str(self.paths.active_auth_path),
-            "current": self.current_overview(),
+            "current": self.current_overview(sync_result=sync_result),
             "accounts": accounts,
             "slots": list(accounts),
             "project_root": str(PROJECT_ROOT),

@@ -1209,6 +1209,60 @@ INDEX_HTML = """<!doctype html>
       return "Access " + access + " · Refresh " + refresh;
     }
 
+    function snapshotSyncMeta(current) {
+      const accountId = current.snapshot_sync_account_id || current.matched_account_id || current.matched_slot_id;
+      const accountLabel = current.matched_account_label || accountId || "这条账号";
+      switch (current.snapshot_sync_status) {
+        case "updated":
+          return {
+            label: "快照已自动同步",
+            tone: "good",
+            detail: accountLabel + " 已更新到当前认证",
+          };
+        case "up_to_date":
+          return {
+            label: "快照已是最新",
+            tone: "accent",
+            detail: accountLabel + " 与当前认证完全一致",
+          };
+        case "not_saved":
+          return {
+            label: "还未关联快照",
+            tone: "muted",
+            detail: "当前认证还没有对应的已保存账号",
+          };
+        case "missing":
+          return {
+            label: "未检测到认证文件",
+            tone: "warn",
+            detail: "当前没有可同步的活动认证",
+          };
+        case "invalid":
+          return {
+            label: "认证文件异常",
+            tone: "bad",
+            detail: "当前认证无法解析，未做自动同步",
+          };
+        case "unidentifiable":
+          return {
+            label: "无法识别账号身份",
+            tone: "warn",
+            detail: "当前认证缺少可稳定识别的账号信息",
+          };
+        default:
+          return {
+            label: "快照同步状态未知",
+            tone: "muted",
+            detail: "当前没有可展示的同步结果",
+          };
+      }
+    }
+
+    function snapshotSyncChip(current) {
+      const meta = snapshotSyncMeta(current);
+      return chip(meta.label, meta.tone);
+    }
+
     function statusDetailCard(meta) {
       return `
         <div class="detail-card">
@@ -1350,6 +1404,8 @@ INDEX_HTML = """<!doctype html>
       const planChip = current.plan_type ? chip(current.plan_type, "ember") : "";
       const accessChip = tokenStatusChip(current, "access");
       const refreshChip = tokenStatusChip(current, "refresh");
+      const syncChip = snapshotSyncChip(current);
+      const syncMeta = snapshotSyncMeta(current);
 
       document.getElementById("current-summary").innerHTML = `
         <div class="identity-avatar">${escapeHtml(avatarText(current))}</div>
@@ -1361,6 +1417,7 @@ INDEX_HTML = """<!doctype html>
             ${currentStateChip(current)}
             ${matchedChip}
             ${planChip}
+            ${syncChip}
             ${accessChip}
             ${refreshChip}
           </div>
@@ -1373,6 +1430,7 @@ INDEX_HTML = """<!doctype html>
         detailCard("账号 ID", current.account_id),
         detailCard("认证方式", current.auth_mode),
         detailCard("已保存账号", current.matched_account_label || matchedId || "未保存"),
+        detailCard("快照同步", syncMeta.detail),
         detailCard("最后刷新", formatDate(current.last_refresh)),
         detailCard("Access 到期", formatDate(current.access_expires_at || current.expires_at))
       ].join("");

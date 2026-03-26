@@ -7,7 +7,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from codex_account_hub.tray import slot_preview_label, tray_title
+from codex_account_hub.tray import slot_preview_label, snapshot_sync_label, tray_title
 
 
 class TrayHelpersTests(unittest.TestCase):
@@ -39,6 +39,10 @@ class TrayHelpersTests(unittest.TestCase):
     def test_tray_title_uses_matched_slot_number(self) -> None:
         overview = {"current": {"matched_slot_id": "account-4"}}
         self.assertEqual(tray_title(overview), "Hub")
+
+    def test_snapshot_sync_label_for_updated_current(self) -> None:
+        current = {"snapshot_sync_status": "updated"}
+        self.assertEqual(snapshot_sync_label(current), "已自动同步")
 
 
 if __name__ == "__main__":

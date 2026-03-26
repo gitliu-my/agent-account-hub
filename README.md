@@ -33,6 +33,7 @@
 
 - Web 控制台优先展示当前活动认证和已保存账号列表
 - 支持“保存当前为新账号”“覆盖已有账号”“切换”“删除”
+- 当前认证如果命中某条已保存账号，会自动把刷新后的 token 同步回快照
 - 菜单栏里直接按邮箱或更可识别的身份展示账号
 - 自动检测当前 `~/.codex/auth.json` 是否已经匹配某条已保存账号
 - 打包成 macOS `.app` 后，数据默认保存到 `~/Library/Application Support/Codex Account Hub`
@@ -44,7 +45,32 @@
 
 ## 安装
 
-推荐直接用 `pipx` 安装:
+### 安装 macOS App
+
+如果你只是想安装桌面 app，而不是安装源码项目，优先用这个:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/gitliu-my/codex-account-hub/main/scripts/install-app.sh)
+```
+
+这条命令会:
+
+- 从 GitHub Releases 下载最新的 `Codex Account Hub.zip`
+- 解压出 `Codex Account Hub.app`
+- 优先安装到 `/Applications`
+- 如果当前 shell 对 `/Applications` 没写权限，就退回到 `~/Applications`
+
+如果你想装指定版本:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/gitliu-my/codex-account-hub/main/scripts/install-app.sh) --version v0.1.0
+```
+
+### 安装 CLI / 本地开发
+
+如果你想要的是命令行工具或本地开发环境，再用下面这些方式。
+
+推荐直接用 `pipx` 安装 CLI:
 
 ```bash
 pipx install git+https://github.com/gitliu-my/codex-account-hub.git
@@ -76,12 +102,18 @@ python3 setup.py py2app
 
 ## 推荐的分发方式
 
-如果目标是“给别人一条命令就能安装”，我推荐这条主路径:
+如果目标是“给别人一条命令就能安装 app”，主路径应该是:
+
+- GitHub Releases 提供 `Codex Account Hub.zip`
+- `scripts/install-app.sh` 负责下载并安装 `.app`
+
+如果目标是“给别人一条命令装 CLI”，再走这条路径:
 
 - `pipx install git+https://github.com/gitliu-my/codex-account-hub.git`
 
 原因:
 
+- app 安装和源码安装是两件事，应该分开
 - 这是 Python 项目，不适合强行套 `npm/npx`
 - `pipx` 会隔离依赖，不容易污染用户环境
 - 已经有 `codex-account-hub` 命令入口，天然适配
@@ -89,10 +121,11 @@ python3 setup.py py2app
 
 如果目标是“像标准桌面软件那样分发”，更合理的第二层方案是:
 
-- 在 GitHub Releases 上传 `Codex Account Hub.app.zip`
+- push 一个 `v*` tag，GitHub Actions 自动构建并上传 `Codex Account Hub.zip`
+- 用户执行 `scripts/install-app.sh` 就能安装或升级 app
 - 后续再补一个 Homebrew Cask
 
-不建议把主安装方式做成 `curl | bash`。
+可以接受一个很薄的安装脚本来下载并放置 `.app`，但不要把它做成“拉源码再现场构建”的脚本。
 
 ## 使用
 

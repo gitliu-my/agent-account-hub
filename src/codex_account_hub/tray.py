@@ -48,6 +48,23 @@ def slot_preview_label(slot: dict[str, Any]) -> str:
     return identity
 
 
+def snapshot_sync_label(current: dict[str, Any]) -> str:
+    status = current.get("snapshot_sync_status")
+    if status == "updated":
+        return "已自动同步"
+    if status == "up_to_date":
+        return "已是最新"
+    if status == "not_saved":
+        return "未关联快照"
+    if status == "invalid":
+        return "认证异常"
+    if status == "missing":
+        return "未检测到认证"
+    if status == "unidentifiable":
+        return "无法识别账号"
+    return "—"
+
+
 def tray_title(overview: dict[str, Any]) -> str:
     return "Hub"
 
@@ -167,6 +184,7 @@ def run_tray(
                 disabled_item(f"当前邮箱: {current.get('email') or '—'}"),
                 disabled_item(f"当前身份: {summary_identity(current)}"),
                 disabled_item(f"Plan: {current.get('plan_type') or '—'}"),
+                disabled_item(f"快照同步: {snapshot_sync_label(current)}"),
                 disabled_item(f"已保存账号: {len(accounts)}"),
                 None,
                 rumps.MenuItem("保存当前为新账号", callback=self._create_new_account),

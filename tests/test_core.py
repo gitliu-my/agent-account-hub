@@ -141,6 +141,35 @@ class AuthHubTests(unittest.TestCase):
         self.assertEqual(current["expires_at"], current["access_expires_at"])
         self.assertTrue(current["has_refresh_token"])
 
+    def test_current_overview_auto_syncs_matching_saved_account(self) -> None:
+        self.write_active_auth("sync@example.com", "Sync", "acct-sync", "plus")
+        self.hub.capture_current("account-1")
+        before_hash = self.hub.account_overview("account-1")["snapshot"]["hash"]
+
+        self.paths.active_auth_path.write_text(
+            json.dumps(
+                build_auth(
+                    "sync@example.com",
+                    "Sync",
+                    "acct-sync",
+                    "plus",
+                    access_exp=1_900_000_123,
+                ),
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        current = self.hub.current_overview()
+        account = self.hub.account_overview("account-1")
+
+        self.assertEqual(current["matched_account_id"], "account-1")
+        self.assertEqual(current["snapshot_sync_status"], "updated")
+        self.assertTrue(current["snapshot_sync_updated"])
+        self.assertNotEqual(before_hash, account["snapshot"]["hash"])
+        self.assertEqual(account["snapshot"]["hash"], current["hash"])
+        self.assertEqual(account["snapshot"]["access_expires_at"], current["access_expires_at"])
+
     def test_switch_replaces_active_auth(self) -> None:
         self.write_active_auth("one@example.com", "One", "acct-one", "plus")
         self.hub.capture_current("account-1")
