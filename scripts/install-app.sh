@@ -104,7 +104,6 @@ else:
 PY
 }
 
-ASSET_URL="$(resolve_asset_url)"
 TMP_DIR="$(mktemp -d)"
 ZIP_PATH="${TMP_DIR}/${ASSET_NAME}"
 APP_STAGING_DIR="${TMP_DIR}/staging"
@@ -114,8 +113,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
+download_with_gh() {
+  if ! command -v gh >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! gh auth status -h github.com >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local repo_ref="${REPO_OWNER}/${REPO_NAME}"
+  if [[ -n "$VERSION" ]]; then
+    gh release download "$VERSION" --repo "$repo_ref" --pattern "$ASSET_NAME" --dir "$TMP_DIR" --clobber
+  else
+    gh release download --repo "$repo_ref" --pattern "$ASSET_NAME" --dir "$TMP_DIR" --clobber
+  fi
+}
+
 echo "Downloading ${ASSET_NAME}..."
-curl -fL --progress-bar "$ASSET_URL" -o "$ZIP_PATH"
+if download_with_gh; then
+  :
+else
+  ASSET_URL="$(resolve_asset_url)"
+  curl -fL --progress-bar "$ASSET_URL" -o "$ZIP_PATH"
+fi
 
 echo "Extracting app bundle..."
 mkdir -p "$APP_STAGING_DIR"

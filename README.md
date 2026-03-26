@@ -47,7 +47,19 @@
 
 ### 安装 macOS App
 
-如果你只是想安装桌面 app，而不是安装源码项目，优先用这个:
+如果你只是想安装桌面 app，而不是安装源码项目，优先走 release 产物。
+
+如果仓库是私有的，最稳的是用已经登录过的 GitHub CLI:
+
+```bash
+tmpdir="$(mktemp -d)" && \
+gh release download --repo gitliu-my/codex-account-hub --pattern "Codex Account Hub.zip" --dir "$tmpdir" && \
+mkdir -p "$HOME/Applications" && \
+ditto -x -k "$tmpdir/Codex Account Hub.zip" "$tmpdir/unpacked" && \
+ditto "$tmpdir/unpacked/Codex Account Hub.app" "$HOME/Applications/Codex Account Hub.app"
+```
+
+如果仓库是公开的，也可以直接运行安装脚本:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/gitliu-my/codex-account-hub/main/scripts/install-app.sh)
@@ -105,7 +117,8 @@ python3 setup.py py2app
 如果目标是“给别人一条命令就能安装 app”，主路径应该是:
 
 - GitHub Releases 提供 `Codex Account Hub.zip`
-- `scripts/install-app.sh` 负责下载并安装 `.app`
+- 私有仓库优先用 `gh release download`
+- 公开仓库可以直接暴露 `scripts/install-app.sh`
 
 如果目标是“给别人一条命令装 CLI”，再走这条路径:
 
