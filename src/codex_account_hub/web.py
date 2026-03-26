@@ -517,6 +517,11 @@ INDEX_HTML = """<!doctype html>
       color: var(--ink);
     }
 
+    .detail-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
     .meta-note {
       color: var(--muted);
       font-size: 0.95rem;
@@ -770,6 +775,45 @@ INDEX_HTML = """<!doctype html>
       margin-top: 4px;
     }
 
+    .token-details {
+      border-top: 1px dashed rgba(30, 25, 22, 0.08);
+      padding-top: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .token-summary {
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .token-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .token-summary-note {
+      color: var(--muted);
+      font-size: 0.88rem;
+      font-weight: 500;
+      text-align: right;
+    }
+
+    .token-body {
+      padding-top: 2px;
+    }
+
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
     .status {
       position: fixed;
       right: 18px;
@@ -904,12 +948,23 @@ INDEX_HTML = """<!doctype html>
         <div class="section-copy">
           <div class="eyebrow">Active Identity</div>
           <h2>当前活动认证</h2>
-          <p>“已保存账号”表示当前 <code>~/.codex/auth.json</code> 与某条已保存账号记录完全一致。</p>
+          <p>主状态按 <code>access_token</code> 判断；展开详情时再看 <code>id_token</code> 和 <code>refresh_token</code>。</p>
         </div>
       </div>
 
       <div id="current-summary" class="identity-shell"></div>
       <div id="current-details" class="detail-grid"></div>
+      <details class="details-shell">
+        <summary class="details-summary">
+          <div class="details-title">
+            <span>认证详细状态</span>
+          </div>
+          <div id="current-auth-summary" class="summary-row"></div>
+        </summary>
+        <div class="details-body">
+          <div id="current-auth-details" class="detail-grid"></div>
+        </div>
+      </details>
     </article>
 
     <section class="panel slots-panel">
@@ -1059,12 +1114,118 @@ INDEX_HTML = """<!doctype html>
       return source.trim().slice(0, 1).toUpperCase() || "未";
     }
 
-    function isExpired(summary) {
-      if (!summary.expires_at) {
-        return false;
+    function parseDate(value) {
+      if (!value) {
+        return null;
       }
-      const parsed = new Date(summary.expires_at);
-      return !Number.isNaN(parsed.getTime()) && parsed.getTime() <= Date.now();
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return null;
+      }
+      return parsed;
+    }
+
+    function isExpiredAt(value) {
+      const parsed = parseDate(value);
+      return parsed ? parsed.getTime() <= Date.now() : false;
+    }
+
+    function isExpired(summary, field = "expires_at") {
+      return isExpiredAt(summary[field]);
+    }
+
+    function tokenStatusMeta(summary, tokenKind) {
+      if (tokenKind === "refresh") {
+        if (summary.has_refresh_token) {
+          return {
+            label: "Refresh Token",
+            state: "已保存",
+            tone: "accent",
+            value: "已检测到",
+            note: "当前认证里包含 refresh_token"
+          };
+        }
+        return {
+          label: "Refresh Token",
+          state: "缺失",
+          tone: "bad",
+          value: "未检测到",
+          note: "当前认证里没有 refresh_token"
+        };
+      }
+
+      const isAccess = tokenKind === "access";
+      const exists = isAccess ? summary.has_access_token : summary.has_id_token;
+      const expiresAt = isAccess ? (summary.access_expires_at || summary.expires_at) : summary.id_expires_at;
+      const label = isAccess ? "Access Token" : "ID Token";
+
+      if (!exists) {
+        return {
+          label,
+          state: "缺失",
+          tone: "bad",
+          value: "未检测到",
+          note: "当前认证里没有这个 token"
+        };
+      }
+
+      if (!expiresAt) {
+        return {
+          label,
+          state: "已检测到",
+          tone: "muted",
+          value: "未解析到过期时间",
+          note: "token 存在，但没有可读的 exp"
+        };
+      }
+
+      if (isExpiredAt(expiresAt)) {
+        return {
+          label,
+          state: "已过期",
+          tone: "bad",
+          value: formatDate(expiresAt),
+          note: "过期时间"
+        };
+      }
+
+      return {
+        label,
+        state: "有效",
+        tone: "good",
+        value: formatDate(expiresAt),
+        note: "过期时间"
+      };
+    }
+
+    function tokenStatusChip(summary, tokenKind) {
+      const meta = tokenStatusMeta(summary, tokenKind);
+      return chip(meta.label + " " + meta.state, meta.tone);
+    }
+
+    function tokenSummaryText(summary) {
+      const access = tokenStatusMeta(summary, "access").state;
+      const refresh = tokenStatusMeta(summary, "refresh").state;
+      return "Access " + access + " · Refresh " + refresh;
+    }
+
+    function statusDetailCard(meta) {
+      return `
+        <div class="detail-card">
+          <div class="detail-label">${escapeHtml(meta.label)}</div>
+          <div class="chip-row">${chip(meta.state, meta.tone)}</div>
+          <div class="detail-value">${text(meta.value)}</div>
+          <div class="detail-note">${text(meta.note)}</div>
+        </div>
+      `;
+    }
+
+    function renderAuthDetailCards(summary) {
+      return [
+        statusDetailCard(tokenStatusMeta(summary, "access")),
+        statusDetailCard(tokenStatusMeta(summary, "id")),
+        statusDetailCard(tokenStatusMeta(summary, "refresh"))
+      ].join("");
     }
 
     function currentStateChip(current) {
@@ -1074,10 +1235,7 @@ INDEX_HTML = """<!doctype html>
       if (current.status === "invalid") {
         return chip("认证文件异常", "bad");
       }
-      if (isExpired(current)) {
-        return chip("Token 已过期", "bad");
-      }
-      return chip("活动认证已就绪", "good");
+      return chip("认证文件已就绪", "accent");
     }
 
     function matchedAccountId(current) {
@@ -1090,9 +1248,6 @@ INDEX_HTML = """<!doctype html>
       }
       if (slot.active) {
         return chip("当前认证", "good");
-      }
-      if (isExpired(slot.snapshot)) {
-        return chip("快照可能过期", "bad");
       }
       return chip("已保存快照", "accent");
     }
@@ -1178,8 +1333,11 @@ INDEX_HTML = """<!doctype html>
       if (slot.active) {
         return "当前活动认证与这条已保存账号记录完全一致。";
       }
-      if (isExpired(slot.snapshot)) {
-        return "快照已保存，但 token 可能已过期。";
+      if (isExpired(slot.snapshot, "access_expires_at") || isExpired(slot.snapshot)) {
+        return "快照已保存，但 Access Token 可能已过期。";
+      }
+      if (!slot.snapshot.has_access_token && slot.snapshot.has_refresh_token) {
+        return "快照里只检测到 Refresh Token，后续是否可恢复取决于客户端刷新。";
       }
       return "可以一键把这份快照写回活动认证文件。";
     }
@@ -1190,9 +1348,8 @@ INDEX_HTML = """<!doctype html>
         ? chip("已在列表中", "accent")
         : chip("未保存到列表", "muted");
       const planChip = current.plan_type ? chip(current.plan_type, "ember") : "";
-      const expiryChip = current.expires_at
-        ? chip(isExpired(current) ? "已过期" : "Token 未过期", isExpired(current) ? "bad" : "good")
-        : chip("未解析到过期时间", "muted");
+      const accessChip = tokenStatusChip(current, "access");
+      const refreshChip = tokenStatusChip(current, "refresh");
 
       document.getElementById("current-summary").innerHTML = `
         <div class="identity-avatar">${escapeHtml(avatarText(current))}</div>
@@ -1204,7 +1361,8 @@ INDEX_HTML = """<!doctype html>
             ${currentStateChip(current)}
             ${matchedChip}
             ${planChip}
-            ${expiryChip}
+            ${accessChip}
+            ${refreshChip}
           </div>
         </div>
       `;
@@ -1215,10 +1373,17 @@ INDEX_HTML = """<!doctype html>
         detailCard("账号 ID", current.account_id),
         detailCard("认证方式", current.auth_mode),
         detailCard("已保存账号", current.matched_account_label || matchedId || "未保存"),
-        detailCard("文件状态", current.status || "missing"),
         detailCard("最后刷新", formatDate(current.last_refresh)),
-        detailCard("过期时间", formatDate(current.expires_at))
+        detailCard("Access 到期", formatDate(current.access_expires_at || current.expires_at))
       ].join("");
+
+      document.getElementById("current-auth-summary").innerHTML = [
+        tokenStatusChip(current, "access"),
+        tokenStatusChip(current, "id"),
+        tokenStatusChip(current, "refresh")
+      ].join("");
+
+      document.getElementById("current-auth-details").innerHTML = renderAuthDetailCards(current);
     }
 
     function renderWorkspace(state) {
@@ -1251,6 +1416,7 @@ INDEX_HTML = """<!doctype html>
       }
       const planChip = info.plan_type ? chip(info.plan_type, "ember") : "";
       const authModeChip = info.auth_mode ? chip(info.auth_mode, "muted") : "";
+      const accessChip = tokenStatusChip(info, "access");
 
       return `
         <article class="${classes.join(" ")}" style="--delay:${index * 60}ms">
@@ -1258,6 +1424,7 @@ INDEX_HTML = """<!doctype html>
             <div class="slot-mark">${escapeHtml(slotToken(slot, index))}</div>
             <div class="chip-row">
               ${slotStateChip(slot)}
+              ${accessChip}
               ${planChip}
               ${authModeChip}
             </div>
@@ -1273,7 +1440,7 @@ INDEX_HTML = """<!doctype html>
 
           <div class="slot-kpis">
             ${slotKpi("更新时间", formatDate(slot.updated_at))}
-            ${slotKpi("过期时间", formatDate(info.expires_at))}
+            ${slotKpi("Access 到期", formatDate(info.access_expires_at || info.expires_at))}
           </div>
 
           <div class="slot-facts">
@@ -1281,6 +1448,18 @@ INDEX_HTML = """<!doctype html>
             ${factRow("账号 ID", info.account_id)}
             ${factRow("最后刷新", formatDate(info.last_refresh))}
           </div>
+
+          <details class="token-details">
+            <summary class="token-summary">
+              <span>查看认证详情</span>
+              <span class="token-summary-note">${text(tokenSummaryText(info))}</span>
+            </summary>
+            <div class="token-body">
+              <div class="token-grid">
+                ${renderAuthDetailCards(info)}
+              </div>
+            </div>
+          </details>
 
           <div class="slot-actions">
             <button class="button secondary" type="button" data-action="capture" data-slot-id="${encodedSlotId}">

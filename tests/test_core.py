@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,12 +24,34 @@ def fake_jwt(payload: dict) -> str:
     return ".".join([encode_segment({"alg": "none"}), encode_segment(payload), "signature"])
 
 
-def build_auth(email: str, name: str, account_id: str, plan_type: str) -> dict:
+def iso_from_timestamp(value: int) -> str:
+    return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+
+
+def build_auth(
+    email: str,
+    name: str,
+    account_id: str,
+    plan_type: str,
+    *,
+    id_exp: int = 1_900_000_000,
+    access_exp: int = 1_900_000_000,
+    include_refresh: bool = True,
+) -> dict:
     id_token = fake_jwt(
         {
             "email": email,
             "name": name,
-            "exp": 1_900_000_000,
+            "exp": id_exp,
+            "https://api.openai.com/auth": {
+                "chatgpt_account_id": account_id,
+                "chatgpt_plan_type": plan_type,
+            },
+        }
+    )
+    access_token = fake_jwt(
+        {
+            "exp": access_exp,
             "https://api.openai.com/auth": {
                 "chatgpt_account_id": account_id,
                 "chatgpt_plan_type": plan_type,
@@ -40,8 +63,8 @@ def build_auth(email: str, name: str, account_id: str, plan_type: str) -> dict:
         "OPENAI_API_KEY": None,
         "tokens": {
             "id_token": id_token,
-            "access_token": id_token,
-            "refresh_token": "refresh",
+            "access_token": access_token,
+            "refresh_token": "refresh" if include_refresh else None,
             "account_id": account_id,
         },
         "last_refresh": "2026-03-25T10:00:00Z",
@@ -93,6 +116,30 @@ class AuthHubTests(unittest.TestCase):
         overview = self.hub.overview()
         self.assertEqual(len(overview["accounts"]), 1)
         self.assertEqual(overview["accounts"][0]["snapshot"]["email"], "new@example.com")
+
+    def test_primary_expiry_uses_access_token(self) -> None:
+        self.paths.active_auth_path.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.active_auth_path.write_text(
+            json.dumps(
+                build_auth(
+                    "token@example.com",
+                    "Token",
+                    "acct-token",
+                    "plus",
+                    id_exp=1_700_000_000,
+                    access_exp=1_900_000_000,
+                ),
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        current = self.hub.current_overview()
+
+        self.assertEqual(current["id_expires_at"], iso_from_timestamp(1_700_000_000))
+        self.assertEqual(current["access_expires_at"], iso_from_timestamp(1_900_000_000))
+        self.assertEqual(current["expires_at"], current["access_expires_at"])
+        self.assertTrue(current["has_refresh_token"])
 
     def test_switch_replaces_active_auth(self) -> None:
         self.write_active_auth("one@example.com", "One", "acct-one", "plus")

@@ -173,6 +173,11 @@ def build_auth_summary(path: Path) -> dict[str, Any]:
         "plan_type": None,
         "last_refresh": None,
         "expires_at": None,
+        "id_expires_at": None,
+        "access_expires_at": None,
+        "has_id_token": False,
+        "has_access_token": False,
+        "has_refresh_token": False,
         "error": None,
     }
 
@@ -187,8 +192,13 @@ def build_auth_summary(path: Path) -> dict[str, Any]:
         summary["error"] = str(exc)
         return summary
 
-    id_claims = decode_jwt_payload(payload.get("tokens", {}).get("id_token"))
-    access_claims = decode_jwt_payload(payload.get("tokens", {}).get("access_token"))
+    tokens = payload.get("tokens", {})
+    id_token = tokens.get("id_token")
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+
+    id_claims = decode_jwt_payload(id_token)
+    access_claims = decode_jwt_payload(access_token)
     auth_claims = (
         id_claims.get("https://api.openai.com/auth")
         or access_claims.get("https://api.openai.com/auth")
@@ -198,17 +208,21 @@ def build_auth_summary(path: Path) -> dict[str, Any]:
     summary["status"] = "ready"
     summary["auth_mode"] = payload.get("auth_mode")
     summary["account_id"] = (
-        payload.get("tokens", {}).get("account_id")
+        tokens.get("account_id")
         or auth_claims.get("chatgpt_account_id")
     )
     summary["name"] = id_claims.get("name")
     summary["email"] = id_claims.get("email")
     summary["plan_type"] = auth_claims.get("chatgpt_plan_type")
     summary["last_refresh"] = payload.get("last_refresh")
-    summary["expires_at"] = (
-        timestamp_to_iso(id_claims.get("exp"))
-        or timestamp_to_iso(access_claims.get("exp"))
-    )
+    summary["id_expires_at"] = timestamp_to_iso(id_claims.get("exp"))
+    summary["access_expires_at"] = timestamp_to_iso(access_claims.get("exp"))
+    summary["has_id_token"] = bool(id_token)
+    summary["has_access_token"] = bool(access_token)
+    summary["has_refresh_token"] = bool(refresh_token)
+    # Use access_token expiry as the primary health signal. It tracks the
+    # token that actually gates API calls more closely than id_token expiry.
+    summary["expires_at"] = summary["access_expires_at"] or summary["id_expires_at"]
     return summary
 
 
