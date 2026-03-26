@@ -1,0 +1,25 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local environments
+.venv/
+.python-version
+
+# Packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# Local app data and snapshots
+data/
+
+# macOS app leftovers
+*.app/
+*.zip
