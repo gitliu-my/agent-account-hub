@@ -20,9 +20,9 @@ Codex Account Hub 是一个本地多账号切换工具，用来管理 Codex `aut
 
 ```bash
 tmpdir="$(mktemp -d)" && \
-gh release download --repo gitliu-my/codex-account-hub --pattern "Codex Account Hub.zip" --dir "$tmpdir" && \
+gh release download --repo gitliu-my/codex-account-hub --pattern "Codex.Account.Hub.zip" --dir "$tmpdir" && \
 mkdir -p "$HOME/Applications" && \
-ditto -x -k "$tmpdir/Codex Account Hub.zip" "$tmpdir/unpacked" && \
+ditto -x -k "$tmpdir/Codex.Account.Hub.zip" "$tmpdir/unpacked" && \
 ditto "$tmpdir/unpacked/Codex Account Hub.app" "$HOME/Applications/Codex Account Hub.app"
 ```
 
@@ -103,4 +103,4 @@ python3 -m pip install py2app
 python3 setup.py py2app
 ```
 
-GitHub Actions 会在 push `v*` tag 时自动构建并发布 `Codex Account Hub.zip`。
+GitHub Actions 会在 push `v*` tag 时自动构建并发布 `Codex.Account.Hub.zip`。

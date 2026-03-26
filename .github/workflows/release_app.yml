@@ -32,16 +32,16 @@ jobs:
         run: python setup.py py2app
 
       - name: Zip app bundle
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/Codex Account Hub.app" "dist/Codex Account Hub.zip"
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Codex Account Hub.app" "dist/Codex.Account.Hub.zip"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: Codex Account Hub macOS app
-          path: dist/Codex Account Hub.zip
+          path: dist/Codex.Account.Hub.zip
 
       - name: Publish release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Codex Account Hub.zip
+          files: dist/Codex.Account.Hub.zip
