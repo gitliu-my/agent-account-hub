@@ -16,7 +16,13 @@ Codex Account Hub 是一个本地多账号切换工具，用来管理 Codex `aut
 
 ### macOS App
 
-如果仓库是私有的，推荐直接从 GitHub Release 安装 `.app`：
+推荐直接用 Homebrew：
+
+```bash
+brew install --cask gitliu-my/tap/codex-account-hub
+```
+
+如果你不想用 Homebrew，也可以直接从 GitHub Release 安装 `.app`：
 
 ```bash
 tmpdir="$(mktemp -d)" && \
