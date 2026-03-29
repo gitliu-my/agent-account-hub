@@ -11,7 +11,7 @@ from .web import serve
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="codex-account-hub",
+        prog="agent-account-hub",
         description="Local multi-account switcher for Codex and Claude Code",
     )
     parser.add_argument(

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 REPO_OWNER="gitliu-my"
-REPO_NAME="codex-account-hub"
+REPO_NAME="agent-account-hub"
 ASSET_NAME="Agent.Account.Hub.zip"
 TARGET_DIR=""
 VERSION=""

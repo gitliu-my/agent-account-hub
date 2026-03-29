@@ -25,14 +25,14 @@ Agent Account Hub 是一个本地多账号切换工具，用来管理不同 CLI 
 推荐直接用 Homebrew：
 
 ```bash
-brew install --cask gitliu-my/tap/codex-account-hub
+brew install --cask gitliu-my/tap/agent-account-hub
 ```
 
 如果你不想用 Homebrew，也可以直接从 GitHub Release 安装 `.app`：
 
 ```bash
 tmpdir="$(mktemp -d)" && \
-gh release download --repo gitliu-my/codex-account-hub --pattern "Agent.Account.Hub.zip" --dir "$tmpdir" && \
+gh release download --repo gitliu-my/agent-account-hub --pattern "Agent.Account.Hub.zip" --dir "$tmpdir" && \
 mkdir -p "$HOME/Applications" && \
 ditto -x -k "$tmpdir/Agent.Account.Hub.zip" "$tmpdir/unpacked" && \
 ditto "$tmpdir/unpacked/Agent Account Hub.app" "$HOME/Applications/Agent Account Hub.app"
@@ -41,7 +41,7 @@ ditto "$tmpdir/unpacked/Agent Account Hub.app" "$HOME/Applications/Agent Account
 如果仓库是公开的，也可以用安装脚本：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/gitliu-my/codex-account-hub/main/scripts/install-app.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/gitliu-my/agent-account-hub/main/scripts/install-app.sh)
 ```
 
 ### CLI / Dev
@@ -74,7 +74,7 @@ open "/Applications/Agent Account Hub.app"
 ### Web
 
 ```bash
-python3 -m codex_account_hub serve
+agent-account-hub serve
 ```
 
 默认地址：
@@ -86,27 +86,27 @@ http://127.0.0.1:8766
 ### Tray
 
 ```bash
-python3 -m codex_account_hub tray
+agent-account-hub tray
 ```
 
 ### CLI
 
 ```bash
-python3 -m codex_account_hub current
-python3 -m codex_account_hub list
-python3 -m codex_account_hub capture-new
-python3 -m codex_account_hub capture account-1
-python3 -m codex_account_hub switch account-1
-python3 -m codex_account_hub clear account-1
+agent-account-hub current
+agent-account-hub list
+agent-account-hub capture-new
+agent-account-hub capture account-1
+agent-account-hub switch account-1
+agent-account-hub clear account-1
 ```
 
 切到 Claude Code：
 
 ```bash
-PYTHONPATH=src python3 -m codex_account_hub --provider claude-code current
-PYTHONPATH=src python3 -m codex_account_hub --provider claude-code list
-PYTHONPATH=src python3 -m codex_account_hub --provider claude-code capture-new
-PYTHONPATH=src python3 -m codex_account_hub --provider claude-code switch account-1
+agent-account-hub --provider claude-code current
+agent-account-hub --provider claude-code list
+agent-account-hub --provider claude-code capture-new
+agent-account-hub --provider claude-code switch account-1
 ```
 
 说明：

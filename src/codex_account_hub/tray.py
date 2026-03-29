@@ -94,7 +94,7 @@ class DashboardServer:
                 server = make_server(self._hub, host=self._host, port=self._port)
                 thread = threading.Thread(
                     target=server.serve_forever,
-                    name="codex-account-hub-dashboard",
+                    name="agent-account-hub-dashboard",
                     daemon=True,
                 )
                 thread.start()

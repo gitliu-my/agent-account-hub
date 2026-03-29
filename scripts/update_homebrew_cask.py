@@ -4,7 +4,7 @@ import argparse
 import re
 from pathlib import Path
 
-CASK_URL = "https://github.com/gitliu-my/codex-account-hub/releases/download/v#{version}/Agent.Account.Hub.zip"
+CASK_URL = "https://github.com/gitliu-my/agent-account-hub/releases/download/v#{version}/Agent.Account.Hub.zip"
 CASK_NAME = "Agent Account Hub"
 CASK_DESC = "Local multi-account auth snapshot switcher for Codex and Claude Code"
 CASK_APP = "Agent Account Hub.app"

@@ -62,7 +62,7 @@ jobs:
           TAP_DIR="$RUNNER_TEMP/homebrew-tap"
           git clone "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/${TAP_REPOSITORY}.git" "$TAP_DIR"
           python scripts/update_homebrew_cask.py \
-            --cask-file "$TAP_DIR/Casks/codex-account-hub.rb" \
+            --cask-file "$TAP_DIR/Casks/agent-account-hub.rb" \
             --version "${RELEASE_VERSION#v}" \
             --sha256 "$ASSET_SHA256"
           cd "$TAP_DIR"
@@ -71,6 +71,6 @@ jobs:
           if git diff --quiet; then
             exit 0
           fi
-          git add Casks/codex-account-hub.rb
-          git commit -m "Update codex-account-hub to ${RELEASE_VERSION}"
+          git add Casks/agent-account-hub.rb
+          git commit -m "Update agent-account-hub to ${RELEASE_VERSION}"
           git push

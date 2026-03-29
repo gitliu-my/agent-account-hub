@@ -3,7 +3,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "codex-account-hub"
+name = "agent-account-hub"
 version = "0.1.1"
 description = "Local multi-account switcher for Codex and Claude Code"
 readme = "README.md"
@@ -14,6 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
+agent-account-hub = "codex_account_hub.cli:main"
 codex-account-hub = "codex_account_hub.cli:main"
 
 [tool.setuptools]
