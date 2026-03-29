@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
 jobs:
   build-release:
     runs-on: macos-14
@@ -52,9 +55,8 @@ jobs:
           files: dist/Agent.Account.Hub.zip
 
       - name: Update Homebrew tap
-        if: startsWith(github.ref, 'refs/tags/') && secrets.HOMEBREW_TAP_GITHUB_TOKEN != ''
+        if: startsWith(github.ref, 'refs/tags/') && env.HOMEBREW_TAP_GITHUB_TOKEN != ''
         env:
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           TAP_REPOSITORY: gitliu-my/homebrew-tap
           RELEASE_VERSION: ${{ github.ref_name }}
           ASSET_SHA256: ${{ steps.asset.outputs.sha256 }}
