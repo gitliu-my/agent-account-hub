@@ -14,7 +14,9 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ACTIVE_AUTH_PATH = Path.home() / ".codex" / "auth.json"
-MACOS_APP_SUPPORT_ROOT = Path.home() / "Library" / "Application Support" / "Codex Account Hub"
+APP_DISPLAY_NAME = "Agent Account Hub"
+MACOS_APP_SUPPORT_ROOT = Path.home() / "Library" / "Application Support" / APP_DISPLAY_NAME
+LEGACY_MACOS_APP_SUPPORT_ROOT = Path.home() / "Library" / "Application Support" / "Codex Account Hub"
 DATA_ROOT_ENV_VAR = "CODEX_ACCOUNT_HUB_DATA_ROOT"
 LEGACY_DATA_ROOT_ENV_VAR = "CODEX_ACCOUNT_HUB_LEGACY_DATA_ROOT"
 
@@ -56,9 +58,14 @@ def default_data_root() -> Path:
 
 def has_saved_data(data_root: Path) -> bool:
     accounts_root = data_root / "accounts"
-    if not accounts_root.is_dir():
-        return False
-    return any(accounts_root.glob("*/auth.json"))
+    if accounts_root.is_dir() and any(accounts_root.glob("*/auth.json")):
+        return True
+
+    claude_accounts_root = data_root / "providers" / "claude-code" / "accounts"
+    if claude_accounts_root.is_dir() and any(claude_accounts_root.glob("*/credentials.json")):
+        return True
+
+    return False
 
 
 def legacy_data_root_candidates(target_data_root: Path) -> list[Path]:
@@ -71,6 +78,9 @@ def legacy_data_root_candidates(target_data_root: Path) -> list[Path]:
     legacy_project_data = PROJECT_ROOT / "data"
     if legacy_project_data != target_data_root:
         candidates.append(legacy_project_data)
+
+    if LEGACY_MACOS_APP_SUPPORT_ROOT != target_data_root:
+        candidates.append(LEGACY_MACOS_APP_SUPPORT_ROOT)
 
     if running_in_bundled_app():
         executable_path = Path(sys.executable).resolve()
@@ -454,7 +464,10 @@ class AuthHub:
             }
             state["accounts"].append(account)
         else:
-            account["label"] = account_label
+            existing_label = str(account.get("label") or "").strip()
+            account["label"] = (
+                account_label if is_placeholder_account_label(existing_label, account_id) else existing_label
+            )
             account["created_at"] = account.get("created_at") or now
             account["updated_at"] = now
 
@@ -586,7 +599,10 @@ class AuthHub:
         except AuthHubError:
             return None
         snapshot = build_auth_summary(self.account_auth_path(account_id))
-        return suggested_account_label(snapshot) if snapshot.get("exists") else str(account.get("label") or account_id)
+        existing_label = str(account.get("label") or "").strip()
+        if snapshot.get("exists") and is_placeholder_account_label(existing_label, account_id):
+            return suggested_account_label(snapshot)
+        return existing_label or (suggested_account_label(snapshot) if snapshot.get("exists") else account_id)
 
     def account_overview(self, account_id: str) -> dict[str, Any]:
         account = dict(self.get_account(account_id))

@@ -6,7 +6,8 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from .core import AuthHub, AuthHubError
+from .core import AuthHubError
+from .providers import UnifiedAuthHub, normalize_provider_name
 
 
 INDEX_HTML = """<!doctype html>
@@ -14,7 +15,7 @@ INDEX_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Codex Auth Hub</title>
+  <title>Agent Account Hub</title>
   <style>
     :root {
       color-scheme: light;
@@ -190,6 +191,30 @@ INDEX_HTML = """<!doctype html>
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
+    }
+
+    .provider-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .provider-tab {
+      min-height: 42px;
+      padding: 0 16px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(30, 25, 22, 0.08);
+      font-weight: 650;
+    }
+
+    .provider-tab.active {
+      color: var(--accent-deep);
+      background: rgba(22, 93, 99, 0.12);
+      border-color: rgba(22, 93, 99, 0.18);
+      box-shadow: 0 10px 24px rgba(13, 68, 72, 0.12);
     }
 
     .topbar-copy p {
@@ -770,7 +795,7 @@ INDEX_HTML = """<!doctype html>
 
     .slot-actions {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       margin-top: 4px;
     }
@@ -931,11 +956,15 @@ INDEX_HTML = """<!doctype html>
     <section class="panel topbar">
       <div class="section-head">
         <div class="section-copy topbar-copy">
-          <div class="eyebrow">Codex Auth Hub</div>
+          <div class="eyebrow">Agent Account Hub</div>
           <h2>当前账号与已保存账号</h2>
-          <p>当前登录的是谁、已保存了哪些账号、是新增还是覆盖，第一屏直接处理，不再引入固定槽位。</p>
+          <p>同一个界面里管理 Codex 的 <code>~/.codex/auth.json</code>，也管理 Claude Code 的 Keychain 凭据快照。</p>
         </div>
         <div class="topbar-actions">
+          <div class="provider-tabs" id="provider-tabs">
+            <button class="provider-tab active" type="button" data-provider="codex">Codex</button>
+            <button class="provider-tab" type="button" data-provider="claude-code">Claude Code</button>
+          </div>
           <div id="sync-pill" class="sync-pill">正在读取状态</div>
           <button id="save-new-button" class="button primary" type="button">保存当前为新账号</button>
           <button id="refresh-button" class="button secondary" type="button">刷新状态</button>
@@ -948,7 +977,7 @@ INDEX_HTML = """<!doctype html>
         <div class="section-copy">
           <div class="eyebrow">Active Identity</div>
           <h2>当前活动认证</h2>
-          <p>主状态按 <code>access_token</code> 判断；展开详情时再看 <code>id_token</code> 和 <code>refresh_token</code>。</p>
+          <p>主状态按当前 provider 的 access token 判断；展开详情时再看更细的 token 与同步状态。</p>
         </div>
       </div>
 
@@ -995,13 +1024,13 @@ INDEX_HTML = """<!doctype html>
           <div class="guide-list">
             <div class="guide-card">
               <div class="guide-step">Step 1</div>
-              <div class="guide-title">保存当前认证</div>
-              <div class="guide-copy">把当前活动的 <code>auth.json</code> 保存成一条新的本地账号记录，之后就能直接切换回来。</div>
+              <div class="guide-title">保存当前凭据</div>
+              <div class="guide-copy">把当前活动凭据保存成一条新的本地账号记录，之后就能直接切换回来。</div>
             </div>
             <div class="guide-card">
               <div class="guide-step">Step 2</div>
               <div class="guide-title">按账号切换</div>
-              <div class="guide-copy">切换时只覆盖活动认证文件，不会重写你的 config、session 或日志目录。</div>
+              <div class="guide-copy">切换时只更新当前 provider 真正使用的凭据载体，不会重写你的 config、session 或日志目录。</div>
             </div>
             <div class="guide-card">
               <div class="guide-step">Step 3</div>
@@ -1018,7 +1047,35 @@ INDEX_HTML = """<!doctype html>
 
   <script>
     const REFRESH_INTERVAL_MS = 20000;
+    const PROVIDERS = {
+      codex: { label: "Codex" },
+      "claude-code": { label: "Claude Code" }
+    };
+    const PROVIDER_STORAGE_KEY = "account-hub:selected-provider";
+    let selectedProvider = normalizeProvider(window.localStorage.getItem(PROVIDER_STORAGE_KEY) || "codex");
     let refreshPromise = null;
+
+    function normalizeProvider(value) {
+      return value === "claude-code" ? "claude-code" : "codex";
+    }
+
+    function providerMeta() {
+      return PROVIDERS[selectedProvider] || PROVIDERS.codex;
+    }
+
+    function providerStatePath() {
+      return "/api/providers/" + encodeURIComponent(selectedProvider) + "/state";
+    }
+
+    function providerActionPath(suffix) {
+      return "/api/providers/" + encodeURIComponent(selectedProvider) + suffix;
+    }
+
+    function setProviderTabs() {
+      document.querySelectorAll("#provider-tabs [data-provider]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.provider === selectedProvider);
+      });
+    }
 
     async function request(path, options = {}) {
       const response = await fetch(path, {
@@ -1284,12 +1341,12 @@ INDEX_HTML = """<!doctype html>
 
     function currentStateChip(current) {
       if (!current.exists) {
-        return chip("未检测到认证", "warn");
+        return chip("未检测到当前凭据", "warn");
       }
       if (current.status === "invalid") {
-        return chip("认证文件异常", "bad");
+        return chip("当前凭据异常", "bad");
       }
-      return chip("认证文件已就绪", "accent");
+      return chip("当前凭据已就绪", "accent");
     }
 
     function matchedAccountId(current) {
@@ -1312,18 +1369,17 @@ INDEX_HTML = """<!doctype html>
 
     function accountDisplayTitle(account) {
       const info = account.snapshot || {};
-      return info.email || account.label || info.name || info.account_id || "未命名账号";
+      return account.label || info.email || info.name || info.account_id || "未命名账号";
     }
 
     function accountDisplayMeta(account) {
       const info = account.snapshot || {};
       const title = accountDisplayTitle(account);
       const parts = [];
-      if (info.name && info.name !== title) {
-        parts.push(info.name);
-      }
-      if (info.account_id) {
-        parts.push(info.account_id);
+      for (const value of [info.email, info.name, info.account_id]) {
+        if (value && value !== title && !parts.includes(value)) {
+          parts.push(value);
+        }
       }
       return parts.join(" · ") || account.id || "本地保存账号";
     }
@@ -1331,16 +1387,13 @@ INDEX_HTML = """<!doctype html>
     function accountIdentityLine(account) {
       const info = account.snapshot || {};
       const title = accountDisplayTitle(account);
-      if (info.name && info.name !== title) {
-        return info.name;
+      const parts = [];
+      for (const value of [info.name, info.email, info.account_id]) {
+        if (value && value !== title && !parts.includes(value)) {
+          parts.push(value);
+        }
       }
-      if (info.account_id) {
-        return info.account_id;
-      }
-      if (info.email && info.email !== title) {
-        return info.email;
-      }
-      return "本地已保存认证";
+      return parts.join(" · ") || "本地已保存认证";
     }
 
     function detailCard(label, value) {
@@ -1378,6 +1431,10 @@ INDEX_HTML = """<!doctype html>
           <div class="fact-value">${text(value)}</div>
         </div>
       `;
+    }
+
+    function encodedDataValue(value) {
+      return encodeURIComponent(String(value || ""));
     }
 
     function slotCaption(slot) {
@@ -1446,8 +1503,8 @@ INDEX_HTML = """<!doctype html>
 
     function renderWorkspace(state) {
       document.getElementById("workspace").innerHTML = [
-        pathCard("活动认证文件", state.active_auth_path, "执行切换时真正会被覆盖的目标文件"),
-        pathCard("Hub 数据目录", state.data_root, "各个已保存账号的 auth.json 快照都存在这里"),
+        pathCard("当前活动凭据", state.active_auth_path, "执行切换时真正会被更新的当前 provider 凭据载体"),
+        pathCard("Hub 数据目录", state.data_root, "各个已保存账号的凭据快照都存在这里"),
         pathCard("项目目录", state.project_root, "源码模式下当前运行的项目根目录")
       ].join("");
     }
@@ -1520,6 +1577,14 @@ INDEX_HTML = """<!doctype html>
           </details>
 
           <div class="slot-actions">
+            <button
+              class="button secondary"
+              type="button"
+              data-action="rename"
+              data-slot-id="${encodedSlotId}"
+              data-slot-label="${encodedDataValue(slot.label || accountDisplayTitle(slot))}">
+              改名称
+            </button>
             <button class="button secondary" type="button" data-action="capture" data-slot-id="${encodedSlotId}">
               用当前覆盖
             </button>
@@ -1580,19 +1645,20 @@ INDEX_HTML = """<!doctype html>
         return refreshPromise;
       }
       const quiet = Boolean(options.quiet);
-      setSyncPill("正在同步本地状态", "syncing");
+      setProviderTabs();
+      setSyncPill("正在同步 " + providerMeta().label + " 状态", "syncing");
 
       refreshPromise = (async () => {
         try {
-          const state = await request("/api/state");
+          const state = await request(providerStatePath());
           renderCurrent(state.current);
           renderWorkspace(state);
           renderSlotSummary(state);
           renderSlots(state);
-          setSyncPill("本地状态已同步", "idle");
+          setSyncPill(providerMeta().label + " 状态已同步", "idle");
           return state;
         } catch (error) {
-          setSyncPill("读取失败", "error");
+          setSyncPill(providerMeta().label + " 读取失败", "error");
           if (!quiet) {
             flash(error.message, true);
           }
@@ -1606,12 +1672,12 @@ INDEX_HTML = """<!doctype html>
     }
 
     async function createNewAccountFromCurrent() {
-      const data = await request("/api/accounts/create-from-current", {
+      const data = await request(providerActionPath("/accounts/create-from-current"), {
         method: "POST",
         body: "{}"
       });
       if (data.created_new_account) {
-        flash("已把当前登录保存为新账号");
+        flash("已把当前 " + providerMeta().label + " 登录保存为新账号");
       } else {
         flash("当前登录已存在，已更新到已有账号");
       }
@@ -1619,7 +1685,7 @@ INDEX_HTML = """<!doctype html>
     }
 
     async function captureSlot(slotId) {
-      const data = await request("/api/accounts/" + encodeSlotId(slotId) + "/capture", {
+      const data = await request(providerActionPath("/accounts/" + encodeSlotId(slotId) + "/capture"), {
         method: "POST",
         body: "{}"
       });
@@ -1633,7 +1699,7 @@ INDEX_HTML = """<!doctype html>
     }
 
     async function switchSlot(slotId) {
-      await request("/api/accounts/" + encodeSlotId(slotId) + "/switch", {
+      await request(providerActionPath("/accounts/" + encodeSlotId(slotId) + "/switch"), {
         method: "POST",
         body: "{}"
       });
@@ -1642,11 +1708,11 @@ INDEX_HTML = """<!doctype html>
     }
 
     async function clearSlot(slotId) {
-      const confirmed = window.confirm("确认删除这个已保存账号吗？这不会删除 ~/.codex/auth.json。");
+      const confirmed = window.confirm("确认删除这个已保存账号吗？这不会删除当前 " + providerMeta().label + " 正在使用的凭据。");
       if (!confirmed) {
         return;
       }
-      await request("/api/accounts/" + encodeSlotId(slotId) + "/delete", {
+      await request(providerActionPath("/accounts/" + encodeSlotId(slotId) + "/delete"), {
         method: "POST",
         body: "{}"
       });
@@ -1654,7 +1720,43 @@ INDEX_HTML = """<!doctype html>
       await refreshState({ quiet: true });
     }
 
+    async function renameSlot(slotId, currentLabel) {
+      const nextLabel = window.prompt("给这个已保存账号起一个更容易识别的名字", currentLabel || "");
+      if (nextLabel === null) {
+        return;
+      }
+
+      const trimmed = nextLabel.trim();
+      if (!trimmed) {
+        throw new Error("名称不能为空");
+      }
+      if (trimmed === (currentLabel || "").trim()) {
+        return;
+      }
+
+      await request(providerActionPath("/accounts/" + encodeSlotId(slotId) + "/rename"), {
+        method: "POST",
+        body: JSON.stringify({ label: trimmed })
+      });
+      flash("已更新账号名称");
+      await refreshState({ quiet: true });
+    }
+
     document.getElementById("refresh-button").addEventListener("click", () => {
+      refreshState().catch(() => {});
+    });
+
+    document.getElementById("provider-tabs").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-provider]");
+      if (!button) {
+        return;
+      }
+      const nextProvider = normalizeProvider(button.dataset.provider || "codex");
+      if (nextProvider === selectedProvider) {
+        return;
+      }
+      selectedProvider = nextProvider;
+      window.localStorage.setItem(PROVIDER_STORAGE_KEY, selectedProvider);
       refreshState().catch(() => {});
     });
 
@@ -1687,6 +1789,17 @@ INDEX_HTML = """<!doctype html>
 
       const slotId = decodeURIComponent(button.dataset.slotId || "");
       if (!slotId) {
+        return;
+      }
+
+      if (action === "rename") {
+        const currentLabel = decodeURIComponent(button.dataset.slotLabel || "");
+        button.disabled = true;
+        renameSlot(slotId, currentLabel)
+          .catch((error) => flash(error.message, true))
+          .finally(() => {
+            button.disabled = false;
+          });
         return;
       }
 
@@ -1731,14 +1844,24 @@ INDEX_HTML = """<!doctype html>
 
 
 class AuthHubRequestHandler(BaseHTTPRequestHandler):
-    hub: AuthHub
+    hub: UnifiedAuthHub
 
     def do_GET(self) -> None:
         if self.path == "/":
             self._send_html(INDEX_HTML)
             return
         if self.path == "/api/state":
-            self._send_json(self.hub.overview())
+            self._send_json(self.hub.provider_overview("codex"))
+            return
+        provider_state_match = re.fullmatch(r"/api/providers/([^/]+)/state", self.path)
+        if provider_state_match:
+            try:
+                provider = normalize_provider_name(provider_state_match.group(1))
+                payload = self.hub.provider_overview(provider)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(payload)
             return
         self._send_error_json(HTTPStatus.NOT_FOUND, "not found")
 
@@ -1746,11 +1869,50 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
         if self.path == "/api/accounts/create-from-current":
             self._read_json_body()
             try:
-                payload = self.hub.create_account_from_current()
+                payload = self.hub.create_account_from_current("codex")
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             self._send_json(payload)
+            return
+
+        provider_create_match = re.fullmatch(r"/api/providers/([^/]+)/accounts/create-from-current", self.path)
+        if provider_create_match:
+            self._read_json_body()
+            try:
+                provider = normalize_provider_name(provider_create_match.group(1))
+                payload = self.hub.create_account_from_current(provider)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(payload)
+            return
+
+        rename_match = re.fullmatch(r"/api/(?:accounts|slots)/([^/]+)/rename", self.path)
+        if rename_match:
+            slot_id = rename_match.group(1)
+            payload = self._read_json_body()
+            try:
+                label = self._parse_label(payload)
+                result = self.hub.rename_account("codex", slot_id, label)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(result)
+            return
+
+        provider_rename_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/rename", self.path)
+        if provider_rename_match:
+            provider = provider_rename_match.group(1)
+            slot_id = provider_rename_match.group(2)
+            payload = self._read_json_body()
+            try:
+                label = self._parse_label(payload)
+                result = self.hub.rename_account(provider, slot_id, label)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(result)
             return
 
         capture_match = re.fullmatch(r"/api/(?:accounts|slots)/([^/]+)/capture", self.path)
@@ -1758,7 +1920,20 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             slot_id = capture_match.group(1)
             self._read_json_body()
             try:
-                payload = self.hub.save_current_to_account(slot_id)
+                payload = self.hub.save_current_to_account("codex", slot_id)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(payload)
+            return
+
+        provider_capture_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/capture", self.path)
+        if provider_capture_match:
+            provider = provider_capture_match.group(1)
+            slot_id = provider_capture_match.group(2)
+            self._read_json_body()
+            try:
+                payload = self.hub.save_current_to_account(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -1770,7 +1945,20 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             slot_id = switch_match.group(1)
             self._read_json_body()
             try:
-                payload = self.hub.switch(slot_id)
+                payload = self.hub.switch("codex", slot_id)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(payload)
+            return
+
+        provider_switch_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/switch", self.path)
+        if provider_switch_match:
+            provider = provider_switch_match.group(1)
+            slot_id = provider_switch_match.group(2)
+            self._read_json_body()
+            try:
+                payload = self.hub.switch(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -1782,7 +1970,23 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             slot_id = clear_match.group(1)
             self._read_json_body()
             try:
-                payload = self.hub.delete_account(slot_id)
+                payload = self.hub.delete_account("codex", slot_id)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(payload)
+            return
+
+        provider_clear_match = re.fullmatch(
+            r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/(?:clear|delete)",
+            self.path,
+        )
+        if provider_clear_match:
+            provider = provider_clear_match.group(1)
+            slot_id = provider_clear_match.group(2)
+            self._read_json_body()
+            try:
+                payload = self.hub.delete_account(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -1809,6 +2013,12 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             raise AuthHubError("JSON body must be an object")
         return payload
 
+    def _parse_label(self, payload: dict[str, Any]) -> str:
+        label = payload.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise AuthHubError("label must not be empty")
+        return label.strip()
+
     def _send_html(self, html: str) -> None:
         encoded = html.encode("utf-8")
         self.send_response(HTTPStatus.OK)
@@ -1829,15 +2039,15 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
         self._send_json({"error": message}, status=status)
 
 
-def make_server(hub: AuthHub, host: str = "127.0.0.1", port: int = 8766) -> ThreadingHTTPServer:
+def make_server(hub: UnifiedAuthHub, host: str = "127.0.0.1", port: int = 8766) -> ThreadingHTTPServer:
     handler = type("BoundAuthHubRequestHandler", (AuthHubRequestHandler,), {"hub": hub})
     return ThreadingHTTPServer((host, port), handler)
 
 
-def serve(hub: AuthHub, host: str = "127.0.0.1", port: int = 8766) -> None:
+def serve(hub: UnifiedAuthHub, host: str = "127.0.0.1", port: int = 8766) -> None:
     server = make_server(hub, host=host, port=port)
     bound_host, bound_port = server.server_address[:2]
-    print(f"Codex Auth Hub running at http://{bound_host}:{bound_port}")
+    print(f"Agent Account Hub running at http://{bound_host}:{bound_port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -182,6 +182,19 @@ class AuthHubTests(unittest.TestCase):
         self.assertEqual(current["email"], "one@example.com")
         self.assertEqual(current["matched_slot_id"], "account-1")
 
+    def test_custom_label_survives_capture_updates(self) -> None:
+        self.write_active_auth("one@example.com", "One", "acct-one", "plus")
+        self.hub.capture_current("account-1")
+        self.hub.rename_slot("account-1", "工作账号")
+
+        self.write_active_auth("one@example.com", "One", "acct-one", "pro")
+        self.hub.capture_current("account-1")
+
+        slot = self.hub.slot_overview("account-1")
+        self.assertEqual(slot["label"], "工作账号")
+        self.assertEqual(slot["snapshot"]["plan_type"], "pro")
+        self.assertEqual(self.hub.current_overview()["matched_account_label"], "工作账号")
+
     def test_capture_moves_existing_binding_to_new_slot(self) -> None:
         self.write_active_auth("same@example.com", "Same", "acct-same", "plus")
         self.hub.capture_current("account-2")

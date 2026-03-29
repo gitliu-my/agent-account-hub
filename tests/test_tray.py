@@ -14,7 +14,7 @@ class TrayHelpersTests(unittest.TestCase):
     def test_slot_preview_label_for_saved_slot(self) -> None:
         slot = {
             "id": "account-2",
-            "label": "账号 2",
+            "label": "工作账号",
             "active": True,
             "snapshot": {
                 "exists": True,
@@ -23,7 +23,7 @@ class TrayHelpersTests(unittest.TestCase):
                 "account_id": "acct-2",
             },
         }
-        self.assertEqual(slot_preview_label(slot), "alice@example.com · 当前")
+        self.assertEqual(slot_preview_label(slot), "工作账号 · 当前")
 
     def test_slot_preview_label_for_empty_slot(self) -> None:
         slot = {

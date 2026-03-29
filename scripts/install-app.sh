@@ -4,13 +4,13 @@ set -euo pipefail
 
 REPO_OWNER="gitliu-my"
 REPO_NAME="codex-account-hub"
-ASSET_NAME="Codex.Account.Hub.zip"
+ASSET_NAME="Agent.Account.Hub.zip"
 TARGET_DIR=""
 VERSION=""
 
 usage() {
   cat <<'EOF'
-Install the latest Codex Account Hub macOS app bundle from GitHub Releases.
+Install the latest Agent Account Hub macOS app bundle from GitHub Releases.
 
 Usage:
   install-app.sh [--user] [--version v0.1.0]
@@ -141,11 +141,11 @@ echo "Extracting app bundle..."
 mkdir -p "$APP_STAGING_DIR"
 ditto -x -k "$ZIP_PATH" "$APP_STAGING_DIR"
 
-APP_SOURCE_PATH="${APP_STAGING_DIR}/Codex Account Hub.app"
-APP_TARGET_PATH="${TARGET_DIR}/Codex Account Hub.app"
+APP_SOURCE_PATH="${APP_STAGING_DIR}/Agent Account Hub.app"
+APP_TARGET_PATH="${TARGET_DIR}/Agent Account Hub.app"
 
 if [[ ! -d "$APP_SOURCE_PATH" ]]; then
-  echo "error: extracted archive did not contain Codex Account Hub.app" >&2
+  echo "error: extracted archive did not contain Agent Account Hub.app" >&2
   exit 1
 fi
 

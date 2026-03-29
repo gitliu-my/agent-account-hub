@@ -26,30 +26,30 @@ jobs:
           python -m pip install -e .
 
       - name: Run tests
-        run: python -m unittest tests.test_core tests.test_tray
+        run: python -m unittest tests.test_core tests.test_providers tests.test_tray
 
       - name: Build app bundle
         run: python setup.py py2app
 
       - name: Zip app bundle
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/Codex Account Hub.app" "dist/Codex.Account.Hub.zip"
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Agent Account Hub.app" "dist/Agent.Account.Hub.zip"
 
       - name: Compute asset checksum
         id: asset
         run: |
-          echo "sha256=$(shasum -a 256 'dist/Codex.Account.Hub.zip' | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(shasum -a 256 'dist/Agent.Account.Hub.zip' | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Codex Account Hub macOS app
-          path: dist/Codex.Account.Hub.zip
+          name: Agent Account Hub macOS app
+          path: dist/Agent.Account.Hub.zip
 
       - name: Publish release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Codex.Account.Hub.zip
+          files: dist/Agent.Account.Hub.zip
 
       - name: Update Homebrew tap
         if: startsWith(github.ref, 'refs/tags/') && secrets.HOMEBREW_TAP_GITHUB_TOKEN != ''

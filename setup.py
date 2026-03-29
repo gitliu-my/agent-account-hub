@@ -9,9 +9,9 @@ APP = ["scripts/CodexAccountHubTray.py"]
 OPTIONS = {
     "argv_emulation": False,
     "plist": {
-        "CFBundleName": "Codex Account Hub",
-        "CFBundleDisplayName": "Codex Account Hub",
-        "CFBundleIdentifier": "dev.codex.accounthub",
+        "CFBundleName": "Agent Account Hub",
+        "CFBundleDisplayName": "Agent Account Hub",
+        "CFBundleIdentifier": "dev.codex.agentaccounthub",
         "LSUIElement": True,
     },
     "packages": ["rumps", *find_packages("src")],

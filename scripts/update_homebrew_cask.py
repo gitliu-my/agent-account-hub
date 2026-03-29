@@ -4,6 +4,11 @@ import argparse
 import re
 from pathlib import Path
 
+CASK_URL = "https://github.com/gitliu-my/codex-account-hub/releases/download/v#{version}/Agent.Account.Hub.zip"
+CASK_NAME = "Agent Account Hub"
+CASK_DESC = "Local multi-account auth snapshot switcher for Codex and Claude Code"
+CASK_APP = "Agent Account Hub.app"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -27,6 +32,10 @@ def main() -> None:
     content = args.cask_file.read_text(encoding="utf-8")
     content = replace_once(r'^  version ".*"$', f'  version "{args.version}"', content)
     content = replace_once(r'^  sha256 ".*"$', f'  sha256 "{args.sha256}"', content)
+    content = replace_once(r'^  url ".*"$', f'  url "{CASK_URL}",', content)
+    content = replace_once(r'^  name ".*"$', f'  name "{CASK_NAME}"', content)
+    content = replace_once(r'^  desc ".*"$', f'  desc "{CASK_DESC}"', content)
+    content = replace_once(r'^  app ".*"$', f'  app "{CASK_APP}"', content)
     args.cask_file.write_text(content, encoding="utf-8")
 
 

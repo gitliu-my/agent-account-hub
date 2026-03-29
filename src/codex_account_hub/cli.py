@@ -5,13 +5,19 @@ import json
 from pathlib import Path
 
 from .core import AuthHub, AuthHubError
+from .providers import ClaudeCodeHub, UnifiedAuthHub, normalize_provider_name, provider_label
 from .web import serve
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="codex-account-hub",
-        description="Minimal auth.json snapshot switcher for Codex",
+        description="Local multi-account switcher for Codex and Claude Code",
+    )
+    parser.add_argument(
+        "--provider",
+        default="codex",
+        help="Target provider for CLI commands: codex or claude-code (default: codex)",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -24,23 +30,23 @@ def build_parser() -> argparse.ArgumentParser:
     tray_parser.add_argument("--dashboard-port", type=int, default=0)
     tray_parser.add_argument("--refresh-seconds", type=float, default=5.0)
 
-    current_parser = subparsers.add_parser("current", help="Show current ~/.codex/auth.json summary")
+    current_parser = subparsers.add_parser("current", help="Show current provider credential summary")
     current_parser.add_argument("--json", action="store_true")
 
     list_parser = subparsers.add_parser("list", help="List saved accounts")
     list_parser.add_argument("--json", action="store_true")
 
     capture_new_parser = subparsers.add_parser(
-        "capture-new", help="Save current auth.json as a new saved account"
+        "capture-new", help="Save current credentials as a new saved account"
     )
 
-    capture_parser = subparsers.add_parser("capture", help="Overwrite a saved account with current auth.json")
+    capture_parser = subparsers.add_parser("capture", help="Overwrite a saved account with current credentials")
     capture_parser.add_argument("slot")
 
-    switch_parser = subparsers.add_parser("switch", help="Switch ~/.codex/auth.json to a saved account")
+    switch_parser = subparsers.add_parser("switch", help="Switch current provider credentials to a saved account")
     switch_parser.add_argument("slot")
 
-    import_parser = subparsers.add_parser("import-file", help="Import an auth.json file into a saved account")
+    import_parser = subparsers.add_parser("import-file", help="Import a credentials snapshot file into a saved account")
     import_parser.add_argument("slot")
     import_parser.add_argument("path", type=Path)
 
@@ -58,8 +64,9 @@ def print_json(payload: dict) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def print_current(payload: dict) -> None:
+def print_current(payload: dict, *, provider_name: str) -> None:
     identity = payload.get("name") or payload.get("email") or payload.get("account_id") or "未登录"
+    print(f"Provider: {provider_name}")
     print(f"当前身份: {identity}")
     print(f"已保存账号: {payload.get('matched_account_label') or payload.get('matched_account_id') or '未保存'}")
     print(f"Plan: {payload.get('plan_type') or '—'}")
@@ -69,9 +76,10 @@ def print_current(payload: dict) -> None:
     print(f"认证文件: {payload.get('path')}")
 
 
-def print_slots(payload: dict) -> None:
+def print_slots(payload: dict, *, provider_name: str) -> None:
     accounts = payload.get("accounts") or payload["slots"]
     current_slot = payload["current"].get("matched_account_id") or payload["current"].get("matched_slot_id")
+    print(f"Provider: {provider_name}")
     for slot in accounts:
         snapshot = slot["snapshot"]
         identity = snapshot.get("name") or snapshot.get("email") or snapshot.get("account_id") or "未保存"
@@ -82,30 +90,33 @@ def print_slots(payload: dict) -> None:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    hub = AuthHub()
 
     try:
         if args.command == "serve":
-            serve(hub, host=args.host, port=args.port)
+            serve(UnifiedAuthHub(), host=args.host, port=args.port)
             return
 
         if args.command == "tray":
             from .tray import run_tray
 
             run_tray(
-                hub,
+                UnifiedAuthHub(),
                 dashboard_host=args.dashboard_host,
                 dashboard_port=args.dashboard_port,
                 refresh_seconds=args.refresh_seconds,
             )
             return
 
+        provider = normalize_provider_name(args.provider)
+        provider_name = provider_label(provider)
+        hub = AuthHub() if provider == "codex" else ClaudeCodeHub()
+
         if args.command == "current":
             payload = hub.current_overview()
             if args.json:
                 print_json(payload)
             else:
-                print_current(payload)
+                print_current(payload, provider_name=provider_name)
             return
 
         if args.command == "list":
@@ -113,7 +124,7 @@ def main() -> None:
             if args.json:
                 print_json(payload)
             else:
-                print_slots(payload)
+                print_slots(payload, provider_name=provider_name)
             return
 
         if args.command == "capture-new":
