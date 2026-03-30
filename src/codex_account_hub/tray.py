@@ -159,6 +159,16 @@ def _slot_frame_fill_color(provider_id: str | None) -> Any:
     return AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.22)
 
 
+def _slot_active_indicator_color(provider_id: str | None) -> Any:
+    if AppKit is None:
+        return None
+    if provider_id == "claude-code":
+        return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.95)
+    if provider_id == "codex":
+        return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.92)
+    return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.88)
+
+
 def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None:
     if AppKit is None or Foundation is None:
         return None
@@ -167,8 +177,8 @@ def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None
         return None
 
     slot_count = len(slots)
-    group_padding_x = 2.5
-    bar_width = max(14.0, 23.0 - max(0, slot_count - 1) * 1.5)
+    group_padding_x = 3.2
+    bar_width = max(16.5, 27.0 - max(0, slot_count - 1) * 1.45)
     group_width = bar_width + group_padding_x * 2.0
     image_width = 4.0 + slot_count * group_width + max(0, slot_count - 1) * MENU_BAR_GROUP_GAP
     size = Foundation.NSMakeSize(image_width, 18.0)
@@ -181,14 +191,26 @@ def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None
         provider_id = str(slot.get("provider_id") or "").strip() or None
         usage = slot.get("usage") or {}
         status = str(usage.get("status") or "")
+        is_active = bool(slot.get("active"))
 
         group_rect = Foundation.NSMakeRect(group_x, 1.0, group_width, 16.0)
         group_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(group_rect, 4.0, 4.0)
-        (_slot_frame_fill_color(provider_id) or AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.22)).setFill()
+        frame_fill = _slot_frame_fill_color(provider_id) or AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.22)
+        if is_active:
+            frame_fill = frame_fill.colorWithAlphaComponent_(min(0.32, frame_fill.alphaComponent() + 0.12))
+        frame_fill.setFill()
         group_path.fill()
-        (_slot_frame_stroke_color(provider_id) or AppKit.NSColor.separatorColor().colorWithAlphaComponent_(0.28)).setStroke()
-        group_path.setLineWidth_(1.1)
+        frame_stroke = _slot_frame_stroke_color(provider_id) or AppKit.NSColor.separatorColor().colorWithAlphaComponent_(0.28)
+        frame_stroke.setStroke()
+        group_path.setLineWidth_(1.65 if is_active else 1.1)
         group_path.stroke()
+
+        if is_active:
+            inner_rect = Foundation.NSMakeRect(group_x + 0.85, 1.85, group_width - 1.7, 14.3)
+            inner_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(inner_rect, 3.2, 3.2)
+            (_slot_active_indicator_color(provider_id) or AppKit.NSColor.controlAccentColor()).setStroke()
+            inner_path.setLineWidth_(1.05)
+            inner_path.stroke()
 
         bar_x = group_x + group_padding_x
         top_track = Foundation.NSMakeRect(bar_x, 9.5, bar_width, 3.0)

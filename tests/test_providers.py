@@ -509,6 +509,10 @@ class ClaudeCodeHubTests(unittest.TestCase):
             [slot["id"] for slot in overview["usage_menu_bar_accounts"]],
             ["account-1", "account-2"],
         )
+        self.assertEqual(
+            {slot["id"]: slot["active"] for slot in overview["usage_menu_bar_accounts"]},
+            {"account-1": False, "account-2": True},
+        )
         visibility = {slot["id"]: slot["usage_menu_bar_visible"] for slot in overview["accounts"]}
         self.assertEqual(visibility, {"account-1": True, "account-2": True})
 
@@ -777,6 +781,10 @@ class CodexUsageHubTests(unittest.TestCase):
         self.assertEqual(
             [slot["id"] for slot in overview["usage_menu_bar_accounts"]],
             ["account-1", "account-2"],
+        )
+        self.assertEqual(
+            {slot["id"]: slot["active"] for slot in overview["usage_menu_bar_accounts"]},
+            {"account-1": False, "account-2": True},
         )
 
 

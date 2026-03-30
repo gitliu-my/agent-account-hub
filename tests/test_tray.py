@@ -91,13 +91,14 @@ class TrayHelpersTests(unittest.TestCase):
         overview = {
             "provider_id": "codex",
             "usage_menu_bar_accounts": [
-                {"id": "account-1", "usage": {"five_hour_percent": 21.0}},
-                {"id": "account-2", "usage": {"seven_day_percent": 64.0}},
+                {"id": "account-1", "active": True, "usage": {"five_hour_percent": 21.0}},
+                {"id": "account-2", "active": False, "usage": {"seven_day_percent": 64.0}},
             ]
         }
         slots = tray_usage_slots(overview)
         self.assertEqual([slot["id"] for slot in slots], ["account-1", "account-2"])
         self.assertEqual([slot["provider_id"] for slot in slots], ["codex", "codex"])
+        self.assertEqual([slot["active"] for slot in slots], [True, False])
 
 
 if __name__ == "__main__":
