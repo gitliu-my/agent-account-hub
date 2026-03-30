@@ -13,8 +13,12 @@ OPTIONS = {
         "CFBundleDisplayName": "Agent Account Hub",
         "CFBundleIdentifier": "dev.codex.agentaccounthub",
         "LSUIElement": True,
+        "NSAppTransportSecurity": {
+            "NSAllowsLocalNetworking": True,
+            "NSAllowsArbitraryLoadsInWebContent": True,
+        },
     },
-    "packages": ["rumps", *find_packages("src")],
+    "packages": ["rumps", "WebKit", *find_packages("src")],
 }
 
 cmdclass = {}

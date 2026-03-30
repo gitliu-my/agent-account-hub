@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-account-hub"
-version = "0.1.6"
+version = "0.1.7"
 description = "Local multi-account switcher for Codex and Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "OpenAI Codex" }]
 dependencies = [
     "rumps>=0.4.0; sys_platform == 'darwin'",
+    "pyobjc-framework-WebKit>=12.1; sys_platform == 'darwin'",
 ]
 
 [project.scripts]

@@ -184,10 +184,40 @@ INDEX_HTML = """<!doctype html>
 
     .topbar {
       padding: 18px 22px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .topbar-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 18px;
+      flex-wrap: wrap;
     }
 
     .topbar-actions {
       display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .action-cluster {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(30, 25, 22, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+    }
+
+    .provider-strip {
+      display: flex;
+      justify-content: space-between;
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
@@ -198,6 +228,10 @@ INDEX_HTML = """<!doctype html>
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+      padding: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(30, 25, 22, 0.08);
     }
 
     .provider-tab {
@@ -217,49 +251,37 @@ INDEX_HTML = """<!doctype html>
       box-shadow: 0 10px 24px rgba(13, 68, 72, 0.12);
     }
 
-    .topbar-copy p {
-      max-width: 44rem;
-    }
-
-    .masthead {
-      padding: 30px;
-    }
-
-    .masthead-grid {
+    .topbar-copy {
       display: grid;
-      grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
-      gap: 20px;
-      align-items: stretch;
+      gap: 8px;
+      max-width: 40rem;
     }
 
-    .brand-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 18px;
-      flex-wrap: wrap;
+    .topbar-copy p {
+      max-width: 40rem;
+      font-size: 0.98rem;
     }
 
     .sync-pill {
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.72);
-      border: 1px solid rgba(30, 25, 22, 0.08);
+      padding: 2px 0;
+      border-radius: 0;
+      background: transparent;
+      border: 0;
       color: var(--muted);
-      font-size: 0.9rem;
+      font-size: 0.92rem;
+      font-weight: 600;
     }
 
     .sync-pill::before {
       content: "";
-      width: 10px;
-      height: 10px;
+      width: 8px;
+      height: 8px;
       border-radius: 999px;
       background: var(--accent);
-      box-shadow: 0 0 0 5px rgba(22, 93, 99, 0.12);
+      box-shadow: 0 0 0 4px rgba(22, 93, 99, 0.12);
     }
 
     .sync-pill.syncing::before {
@@ -1317,6 +1339,12 @@ INDEX_HTML = """<!doctype html>
         padding: 18px;
       }
 
+      .provider-strip,
+      .topbar-main {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
       .details-summary {
         padding: 16px 18px;
       }
@@ -1354,21 +1382,25 @@ INDEX_HTML = """<!doctype html>
 <body>
   <main>
     <section class="panel topbar">
-      <div class="section-head">
+      <div class="provider-strip">
+        <div class="provider-tabs" id="provider-tabs">
+          <button class="provider-tab active" type="button" data-provider="codex">Codex</button>
+          <button class="provider-tab" type="button" data-provider="claude-code">Claude Code</button>
+        </div>
+        <div id="sync-pill" class="sync-pill">正在读取状态</div>
+      </div>
+      <div class="topbar-main">
         <div class="section-copy topbar-copy">
-          <div class="eyebrow">Agent Account Hub</div>
-          <h2>当前账号与已保存账号</h2>
-          <p>同一个界面里管理 Codex 的 <code>~/.codex/auth.json</code>，也管理 Claude Code 的 Keychain 凭据快照。</p>
+          <div class="eyebrow">Control Center</div>
+          <h2>账号控制台</h2>
+          <p>先在顶部切换平台，再在这个 app 内维护账号、查看用量和菜单栏展示。</p>
         </div>
         <div class="topbar-actions">
-          <div class="provider-tabs" id="provider-tabs">
-            <button class="provider-tab active" type="button" data-provider="codex">Codex</button>
-            <button class="provider-tab" type="button" data-provider="claude-code">Claude Code</button>
+          <div class="action-cluster">
+            <button id="save-new-button" class="button primary" type="button">保存当前为新账号</button>
+            <button id="refresh-usage-button" class="button secondary" type="button" hidden>刷新全部用量</button>
+            <button id="refresh-button" class="button secondary" type="button">刷新状态</button>
           </div>
-          <div id="sync-pill" class="sync-pill">正在读取状态</div>
-          <button id="save-new-button" class="button primary" type="button">保存当前为新账号</button>
-          <button id="refresh-usage-button" class="button secondary" type="button" hidden>刷新全部用量</button>
-          <button id="refresh-button" class="button secondary" type="button">刷新状态</button>
         </div>
       </div>
     </section>
@@ -1440,6 +1472,12 @@ INDEX_HTML = """<!doctype html>
         </summary>
         <div class="details-body">
           <div id="workspace" class="path-stack"></div>
+
+          <div class="guide-card">
+            <div class="guide-step">Reference</div>
+            <div class="guide-title">当前认证载体说明</div>
+            <div class="guide-copy">同一个界面里管理 Codex 的 <code>~/.codex/auth.json</code>，也管理 Claude Code 的 Keychain 凭据快照。</div>
+          </div>
 
           <div class="guide-list">
             <div class="guide-card">

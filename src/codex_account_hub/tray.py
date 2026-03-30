@@ -8,6 +8,7 @@ from http.server import ThreadingHTTPServer
 from typing import Any
 
 from .core import AuthHubError
+from .native_window import NativeHubWindow
 from .providers import UnifiedAuthHub, provider_label
 from .ui_helpers import (
     APP_NAME,
@@ -25,6 +26,7 @@ from .web import make_server
 DEFAULT_USAGE_AUTO_REFRESH_SECONDS = 5 * 60
 MENU_BAR_GROUP_GAP = 4.0
 TRAY_UI_POLL_SECONDS = 1.0
+STATUS_ITEM_HIDDEN_TITLE = "\u200b"
 
 try:
     import AppKit
@@ -250,6 +252,33 @@ def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None
     return image
 
 
+def build_loading_status_icon() -> Any | None:
+    if AppKit is None or Foundation is None:
+        return None
+
+    size = Foundation.NSMakeSize(28.0, 18.0)
+    image = AppKit.NSImage.alloc().initWithSize_(size)
+    image.setTemplate_(False)
+    image.lockFocus()
+
+    frame_rect = Foundation.NSMakeRect(3.0, 3.0, 22.0, 12.0)
+    frame_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(frame_rect, 4.0, 4.0)
+    AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.14).setFill()
+    frame_path.fill()
+    AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.28).setStroke()
+    frame_path.setLineWidth_(1.0)
+    frame_path.stroke()
+
+    for x in (8.0, 12.5, 17.0):
+        dot_rect = Foundation.NSMakeRect(x, 7.0, 2.4, 2.4)
+        dot_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(dot_rect, 1.2, 1.2)
+        AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.7).setFill()
+        dot_path.fill()
+
+    image.unlockFocus()
+    return image
+
+
 def build_usage_status_icon(overview: dict[str, Any]) -> Any | None:
     return build_usage_status_icon_for_slots(tray_usage_slots(overview))
 
@@ -313,6 +342,10 @@ def run_tray(
         ) from exc
 
     dashboard = DashboardServer(hub, host=dashboard_host, port=dashboard_port)
+    try:
+        console_window: NativeHubWindow | None = NativeHubWindow(open_dashboard=dashboard.ensure_started)
+    except AuthHubError:
+        console_window = None
     interval = max(3.0, float(refresh_seconds))
 
     def disabled_item(title: str) -> Any:
@@ -322,7 +355,7 @@ def run_tray(
 
     class AuthHubTrayApp(rumps.App):
         def __init__(self) -> None:
-            super().__init__(APP_NAME, title="Hub", quit_button=None)
+            super().__init__(APP_NAME, title=STATUS_ITEM_HIDDEN_TITLE, quit_button=None)
             self._timer = rumps.Timer(self._refresh_from_timer, TRAY_UI_POLL_SECONDS)
             now = time.monotonic()
             self._last_usage_refresh_at = {
@@ -336,6 +369,7 @@ def run_tray(
             self._pending_usage_refreshed: list[str] = []
             self._refresh_lock = threading.Lock()
             self._refresh_inflight = False
+            self._set_status_item_image(build_loading_status_icon())
             self._set_loading_menu("正在读取状态…")
             self._start_background_refresh(force=True)
 
@@ -382,7 +416,7 @@ def run_tray(
                     None,
                     disabled_item(message),
                     None,
-                    rumps.MenuItem("打开网页控制台", callback=self._open_dashboard),
+                    rumps.MenuItem("打开控制台", callback=self._open_dashboard),
                     rumps.MenuItem("刷新状态", callback=self._manual_refresh),
                     rumps.MenuItem("退出", callback=self._quit),
                 ]
@@ -459,7 +493,7 @@ def run_tray(
                         disabled_item(f"读取失败: {error_message}"),
                         None,
                         rumps.MenuItem("刷新状态", callback=self._manual_refresh),
-                        rumps.MenuItem("打开网页控制台", callback=self._open_dashboard),
+                        rumps.MenuItem("打开控制台", callback=self._open_dashboard),
                         rumps.MenuItem("退出", callback=self._quit),
                     ]
                 )
@@ -484,7 +518,7 @@ def run_tray(
                         disabled_item(f"读取失败: {exc}"),
                         None,
                         rumps.MenuItem("刷新状态", callback=self._manual_refresh),
-                        rumps.MenuItem("打开网页控制台", callback=self._open_dashboard),
+                        rumps.MenuItem("打开控制台", callback=self._open_dashboard),
                         rumps.MenuItem("退出", callback=self._quit),
                     ]
                 )
@@ -503,24 +537,32 @@ def run_tray(
             error: bool = False,
         ) -> None:
             if error:
-                self.title = "Hub !"
                 self._set_status_item_image(None)
+                self._set_native_status_title("Hub !")
                 return
 
             if overviews:
                 image = build_usage_status_icon_for_slots(tray_usage_slots_from_overviews(overviews))
-                self.title = "" if image is not None else "Hub"
                 self._set_status_item_image(image)
+                self._set_native_status_title("" if image is not None else "Hub")
                 return
 
-            self.title = "Hub"
-            self._set_status_item_image(None)
+            self._set_status_item_image(build_loading_status_icon())
+            self._set_native_status_title("")
 
         def _set_status_item_image(self, image: Any | None) -> None:
             self._icon = None
             self._icon_nsimage = image
             try:
                 self._nsapp.setStatusBarIcon()
+            except AttributeError:
+                pass
+
+        def _set_native_status_title(self, title: str) -> None:
+            normalized = title if title else STATUS_ITEM_HIDDEN_TITLE
+            self._title = normalized
+            try:
+                self._nsapp.nsstatusitem.setTitle_(normalized)
             except AttributeError:
                 pass
 
@@ -535,7 +577,7 @@ def run_tray(
             items.extend(
                 [
                     None,
-                    rumps.MenuItem("打开网页控制台", callback=self._open_dashboard),
+                    rumps.MenuItem("打开控制台", callback=self._open_dashboard),
                     rumps.MenuItem("刷新状态", callback=self._manual_refresh),
                     rumps.MenuItem("退出", callback=self._quit),
                 ]
@@ -671,7 +713,7 @@ def run_tray(
                 items.append(refresh_usage_item)
                 items.append(
                     rumps.MenuItem(
-                        "打开网页控制台查看更多",
+                        "打开控制台查看更多",
                         callback=self._open_dashboard,
                     )
                 )
@@ -705,11 +747,20 @@ def run_tray(
             try:
                 url = dashboard.ensure_started()
             except OSError as exc:
-                rumps.alert("无法启动网页控制台", str(exc))
+                rumps.alert("无法启动控制台", str(exc))
                 return
 
+            if console_window is not None:
+                try:
+                    console_window.show()
+                except AuthHubError:
+                    pass
+                else:
+                    self._notify(APP_NAME, "已打开控制台", "应用内控制台已置前")
+                    return
+
             webbrowser.open(url)
-            self._notify(APP_NAME, "已打开网页控制台", url)
+            self._notify(APP_NAME, "已在浏览器中打开控制台", url)
 
         def _capture_slot(self, provider: str, slot_id: str, slot_label: str):
             def callback(_sender: Any) -> None:
@@ -825,6 +876,8 @@ def run_tray(
             return callback
 
         def _quit(self, _sender: Any) -> None:
+            if console_window is not None:
+                console_window.close()
             dashboard.shutdown()
             rumps.quit_application()
 

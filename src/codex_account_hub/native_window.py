@@ -4,16 +4,17 @@ import webbrowser
 from typing import Any, Callable
 
 from .core import AuthHubError
-from .providers import UnifiedAuthHub, provider_label
-from .ui_helpers import APP_NAME, current_summary_items, slot_table_row
+from .ui_helpers import APP_NAME
 
 try:
     import AppKit
     import Foundation
+    import WebKit
     import objc
 except ImportError:
     AppKit = None
     Foundation = None
+    WebKit = None
     objc = None
 
 
@@ -24,71 +25,45 @@ else:
         return func
 
 
-if AppKit is not None and Foundation is not None and objc is not None:
-    class _HubWindowController(Foundation.NSObject):
+if AppKit is not None and Foundation is not None and WebKit is not None and objc is not None:
+    class _DashboardWindowController(Foundation.NSObject):
         def init(self):
-            self = objc.super(_HubWindowController, self).init()
+            self = objc.super(_DashboardWindowController, self).init()
             if self is None:
                 return None
 
-            self.hub = None
             self.open_dashboard = None
-            self.provider_ids: list[str] = []
-            self.provider_titles: dict[str, str] = {}
-            self.current_provider = "codex"
-            self._overview: dict[str, Any] = {}
-            self._rows: list[dict[str, str | bool]] = []
-            self._accounts: list[dict[str, Any]] = []
-            self._selected_account_id: str | None = None
             self.window = None
-            self.provider_popup = None
-            self.summary_fields: dict[str, Any] = {}
-            self.table_view = None
+            self.web_view = None
             self.status_label = None
-            self.switch_button = None
-            self.capture_button = None
-            self.rename_button = None
-            self.delete_button = None
+            self.url_label = None
+            self._current_url = None
+            self._foreground_mode = False
+            self._main_menu = None
+            self._window_menu = None
             return self
 
         @python_method
-        def configure(self, hub: UnifiedAuthHub, open_dashboard: Callable[[], str]) -> None:
-            self.hub = hub
+        def configure(self, open_dashboard: Callable[[], str]) -> None:
             self.open_dashboard = open_dashboard
-            self.provider_ids = list(hub.provider_ids())
-            self.provider_titles = {provider_label(provider): provider for provider in self.provider_ids}
-            if self.provider_ids:
-                self.current_provider = self.provider_ids[0]
             self._build_window()
-            self.reload_data()
 
         @python_method
         def show(self) -> None:
-            self.reload_data()
-            self.window.center()
+            self._set_foreground_mode(True)
+            self._ensure_dashboard_loaded()
             self.window.makeKeyAndOrderFront_(None)
             AppKit.NSApp.activateIgnoringOtherApps_(True)
 
         @python_method
-        def reload_data(self, status_message: str | None = None) -> None:
-            if self.hub is None:
-                return
+        def close(self) -> None:
+            if self.window is not None:
+                self.window.orderOut_(None)
+            self._set_foreground_mode(False)
 
-            try:
-                overview = self.hub.provider_overview(self.current_provider)
-            except (AuthHubError, OSError) as exc:
-                self._set_status(str(exc), error=True)
-                return
-
-            self._overview = overview
-            self._accounts = list(overview.get("accounts") or overview.get("slots") or [])
-            self._rows = [slot_table_row(slot) for slot in self._accounts]
-            self._reload_summary_fields()
-            self.table_view.reloadData()
-            self._restore_selection()
-            self._update_action_buttons()
-            if status_message:
-                self._set_status(status_message)
+        @python_method
+        def reload(self) -> None:
+            self._ensure_dashboard_loaded(force_reload=True)
 
         @python_method
         def _build_window(self) -> None:
@@ -101,187 +76,165 @@ if AppKit is not None and Foundation is not None and objc is not None:
                 | AppKit.NSWindowStyleMaskMiniaturizable
                 | AppKit.NSWindowStyleMaskResizable
             )
-            rect = Foundation.NSMakeRect(0, 0, 1080, 720)
-            self.window = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            rect = Foundation.NSMakeRect(0, 0, 1240, 860)
+            window = AppKit.NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
                 rect,
                 style_mask,
                 AppKit.NSBackingStoreBuffered,
                 False,
             )
-            self.window.setTitle_(APP_NAME)
-            self.window.setReleasedWhenClosed_(False)
-            self.window.setMinSize_(Foundation.NSMakeSize(960, 640))
+            window.setTitle_(APP_NAME)
+            window.setReleasedWhenClosed_(False)
+            window.setMinSize_(Foundation.NSMakeSize(980, 700))
+            window.setFrameAutosaveName_("AgentAccountHubEmbeddedConsole")
+            window.setDelegate_(self)
 
-            content = self.window.contentView()
+            content = window.contentView()
+            bounds = content.bounds()
+            header_height = 86.0
+
+            background = AppKit.NSVisualEffectView.alloc().initWithFrame_(bounds)
+            background.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable)
+            background.setBlendingMode_(AppKit.NSVisualEffectBlendingModeBehindWindow)
+            background.setState_(AppKit.NSVisualEffectStateActive)
+            material = getattr(AppKit, "NSVisualEffectMaterialSidebar", None)
+            if material is not None:
+                background.setMaterial_(material)
+            content.addSubview_(background)
+
+            header = AppKit.NSVisualEffectView.alloc().initWithFrame_(
+                Foundation.NSMakeRect(0, bounds.size.height - header_height, bounds.size.width, header_height)
+            )
+            header.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewMinYMargin)
+            header.setBlendingMode_(AppKit.NSVisualEffectBlendingModeWithinWindow)
+            header.setState_(AppKit.NSVisualEffectStateActive)
+            header_material = getattr(AppKit, "NSVisualEffectMaterialHeaderView", None)
+            if header_material is None:
+                header_material = getattr(AppKit, "NSVisualEffectMaterialWindowBackground", None)
+            if header_material is not None:
+                header.setMaterial_(header_material)
+            background.addSubview_(header)
 
             title_label = self._make_label(
-                Foundation.NSMakeRect(24, 670, 360, 28),
+                Foundation.NSMakeRect(24, 44, 320, 28),
                 APP_NAME,
                 font=AppKit.NSFont.boldSystemFontOfSize_(26),
             )
-            content.addSubview_(title_label)
+            header.addSubview_(title_label)
 
             subtitle_label = self._make_label(
-                Foundation.NSMakeRect(24, 646, 540, 18),
-                "原生 app 控制台，直接在应用里切换和管理账号。",
+                Foundation.NSMakeRect(24, 22, 460, 18),
+                "应用内控制台，直接在 app 里维护账号、查看用量和菜单栏展示。",
                 color=AppKit.NSColor.secondaryLabelColor(),
             )
-            content.addSubview_(subtitle_label)
+            header.addSubview_(subtitle_label)
 
-            self.provider_popup = AppKit.NSPopUpButton.alloc().initWithFrame_pullsDown_(
-                Foundation.NSMakeRect(24, 606, 180, 30),
-                False,
+            self.url_label = self._make_label(
+                Foundation.NSMakeRect(24, 4, 700, 16),
+                "本地控制台尚未启动",
+                font=AppKit.NSFont.systemFontOfSize_(11),
+                color=AppKit.NSColor.tertiaryLabelColor(),
             )
-            for provider in self.provider_ids:
-                self.provider_popup.addItemWithTitle_(provider_label(provider))
-            self.provider_popup.setTarget_(self)
-            self.provider_popup.setAction_("providerChanged:")
-            content.addSubview_(self.provider_popup)
+            self.url_label.setLineBreakMode_(AppKit.NSLineBreakByTruncatingMiddle)
+            header.addSubview_(self.url_label)
+
+            open_browser_button = self._make_button(
+                "浏览器打开",
+                Foundation.NSMakeRect(bounds.size.width - 250, 28, 110, 34),
+                "openInBrowserClicked:",
+            )
+            open_browser_button.setAutoresizingMask_(AppKit.NSViewMinXMargin)
+            header.addSubview_(open_browser_button)
 
             refresh_button = self._make_button(
-                "刷新状态",
-                Foundation.NSMakeRect(220, 604, 100, 32),
+                "刷新",
+                Foundation.NSMakeRect(bounds.size.width - 126, 28, 92, 34),
                 "refreshClicked:",
             )
-            content.addSubview_(refresh_button)
-
-            save_button = self._make_button(
-                "保存当前为新账号",
-                Foundation.NSMakeRect(332, 604, 148, 32),
-                "saveCurrentAsNew:",
-            )
-            content.addSubview_(save_button)
-
-            web_button = self._make_button(
-                "打开网页控制台",
-                Foundation.NSMakeRect(492, 604, 132, 32),
-                "openWebConsole:",
-            )
-            content.addSubview_(web_button)
-
-            current_box = AppKit.NSBox.alloc().initWithFrame_(Foundation.NSMakeRect(24, 432, 1032, 150))
-            current_box.setTitle_("当前登录")
-            current_box.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewMinYMargin)
-            content.addSubview_(current_box)
-            self._build_summary_grid(current_box.contentView())
-
-            table_label = self._make_label(
-                Foundation.NSMakeRect(24, 404, 240, 18),
-                "已保存账号",
-                font=AppKit.NSFont.boldSystemFontOfSize_(15),
-            )
-            table_label.setAutoresizingMask_(AppKit.NSViewMaxXMargin | AppKit.NSViewMinYMargin)
-            content.addSubview_(table_label)
-
-            table_hint = self._make_label(
-                Foundation.NSMakeRect(24, 384, 480, 16),
-                "选中一个账号后，可以直接切换、覆盖、重命名或删除；Claude 账号还会显示用量摘要。",
-                color=AppKit.NSColor.secondaryLabelColor(),
-            )
-            table_hint.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewMinYMargin)
-            content.addSubview_(table_hint)
-
-            self._build_accounts_table(content)
-            self._build_action_row(content)
+            refresh_button.setAutoresizingMask_(AppKit.NSViewMinXMargin)
+            header.addSubview_(refresh_button)
 
             self.status_label = self._make_label(
-                Foundation.NSMakeRect(24, 20, 1032, 20),
-                "就绪",
+                Foundation.NSMakeRect(bounds.size.width - 310, 8, 276, 16),
+                "准备就绪",
+                font=AppKit.NSFont.systemFontOfSize_(11),
                 color=AppKit.NSColor.secondaryLabelColor(),
             )
-            self.status_label.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewMaxYMargin)
-            content.addSubview_(self.status_label)
+            self.status_label.setAlignment_(AppKit.NSTextAlignmentRight)
+            self.status_label.setAutoresizingMask_(AppKit.NSViewMinXMargin)
+            header.addSubview_(self.status_label)
+
+            web_frame = Foundation.NSMakeRect(18, 18, bounds.size.width - 36, bounds.size.height - header_height - 26)
+            web_view = WebKit.WKWebView.alloc().initWithFrame_configuration_(
+                web_frame,
+                WebKit.WKWebViewConfiguration.alloc().init(),
+            )
+            web_view.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable)
+            background.addSubview_(web_view)
+
+            self.window = window
+            self.web_view = web_view
 
         @python_method
-        def _build_summary_grid(self, view: Any) -> None:
-            pairs = [
-                ("Provider", (18, 90)),
-                ("当前身份", (18, 46)),
-                ("当前邮箱", (280, 90)),
-                ("已关联快照", (280, 46)),
-                ("Plan", (542, 90)),
-                ("认证方式", (542, 46)),
-                ("快照同步", (804, 90)),
-                ("已保存账号", (804, 46)),
-            ]
-            for title, (x, y) in pairs:
-                label = self._make_label(
-                    Foundation.NSMakeRect(x, y + 18, 120, 16),
-                    title,
-                    color=AppKit.NSColor.secondaryLabelColor(),
-                )
-                value = self._make_label(
-                    Foundation.NSMakeRect(x, y, 214, 22),
-                    "—",
-                    font=AppKit.NSFont.systemFontOfSize_(14),
-                )
-                value.setLineBreakMode_(AppKit.NSLineBreakByTruncatingTail)
-                value.setAutoresizingMask_(AppKit.NSViewMaxXMargin | AppKit.NSViewMinYMargin)
-                view.addSubview_(label)
-                view.addSubview_(value)
-                self.summary_fields[title] = value
+        def _set_foreground_mode(self, enabled: bool) -> None:
+            if self._foreground_mode == enabled:
+                return
+            policy = (
+                AppKit.NSApplicationActivationPolicyRegular
+                if enabled
+                else AppKit.NSApplicationActivationPolicyAccessory
+            )
+            if enabled:
+                self._ensure_main_menu()
+            AppKit.NSApp.setActivationPolicy_(policy)
+            self._foreground_mode = enabled
 
         @python_method
-        def _build_accounts_table(self, content: Any) -> None:
-            scroll = AppKit.NSScrollView.alloc().initWithFrame_(Foundation.NSMakeRect(24, 116, 1032, 250))
-            scroll.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable)
-            scroll.setHasVerticalScroller_(True)
-            scroll.setAutohidesScrollers_(True)
-            table = AppKit.NSTableView.alloc().initWithFrame_(scroll.bounds())
-            table.setDelegate_(self)
-            table.setDataSource_(self)
-            table.setUsesAlternatingRowBackgroundColors_(True)
-            table.setAllowsEmptySelection_(True)
-            table.setAutoresizingMask_(AppKit.NSViewWidthSizable | AppKit.NSViewHeightSizable)
+        def _ensure_main_menu(self) -> None:
+            if self._main_menu is not None:
+                AppKit.NSApp.setMainMenu_(self._main_menu)
+                if self._window_menu is not None:
+                    AppKit.NSApp.setWindowsMenu_(self._window_menu)
+                return
 
-            for identifier, title, width in [
-                ("status", "状态", 96),
-                ("label", "名称", 220),
-                ("email", "邮箱", 250),
-                ("identity", "身份", 280),
-                ("plan", "Plan", 120),
-                ("usage", "用量", 140),
-            ]:
-                column = AppKit.NSTableColumn.alloc().initWithIdentifier_(identifier)
-                column.headerCell().setStringValue_(title)
-                column.setWidth_(width)
-                table.addTableColumn_(column)
+            main_menu = AppKit.NSMenu.alloc().initWithTitle_("")
 
-            scroll.setDocumentView_(table)
-            content.addSubview_(scroll)
-            self.table_view = table
+            app_menu_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("", None, "")
+            app_menu = AppKit.NSMenu.alloc().initWithTitle_(APP_NAME)
+            app_menu.addItemWithTitle_action_keyEquivalent_(f"关于 {APP_NAME}", "orderFrontStandardAboutPanel:", "")
+            app_menu.addItem_(AppKit.NSMenuItem.separatorItem())
+            app_menu.addItemWithTitle_action_keyEquivalent_(f"隐藏 {APP_NAME}", "hide:", "h")
+            hide_others = app_menu.addItemWithTitle_action_keyEquivalent_("隐藏其他", "hideOtherApplications:", "h")
+            hide_others.setKeyEquivalentModifierMask_(
+                AppKit.NSEventModifierFlagCommand | AppKit.NSEventModifierFlagOption
+            )
+            app_menu.addItemWithTitle_action_keyEquivalent_("显示全部", "unhideAllApplications:", "")
+            app_menu.addItem_(AppKit.NSMenuItem.separatorItem())
+            app_menu.addItemWithTitle_action_keyEquivalent_(f"退出 {APP_NAME}", "terminate:", "q")
+            app_menu_item.setSubmenu_(app_menu)
+            main_menu.addItem_(app_menu_item)
 
-        @python_method
-        def _build_action_row(self, content: Any) -> None:
-            self.switch_button = self._make_button(
-                "切换到选中账号",
-                Foundation.NSMakeRect(24, 64, 146, 34),
-                "switchSelectedAccount:",
-            )
-            self.capture_button = self._make_button(
-                "用当前登录覆盖",
-                Foundation.NSMakeRect(182, 64, 146, 34),
-                "captureSelectedAccount:",
-            )
-            self.rename_button = self._make_button(
-                "重命名",
-                Foundation.NSMakeRect(340, 64, 100, 34),
-                "renameSelectedAccount:",
-            )
-            self.delete_button = self._make_button(
-                "删除",
-                Foundation.NSMakeRect(452, 64, 100, 34),
-                "deleteSelectedAccount:",
-            )
+            file_menu_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("", None, "")
+            file_menu = AppKit.NSMenu.alloc().initWithTitle_("文件")
+            reload_item = file_menu.addItemWithTitle_action_keyEquivalent_("刷新控制台", "refreshClicked:", "r")
+            reload_item.setTarget_(self)
+            browser_item = file_menu.addItemWithTitle_action_keyEquivalent_("在浏览器中打开", "openInBrowserClicked:", "o")
+            browser_item.setTarget_(self)
+            file_menu_item.setSubmenu_(file_menu)
+            main_menu.addItem_(file_menu_item)
 
-            for button in [
-                self.switch_button,
-                self.capture_button,
-                self.rename_button,
-                self.delete_button,
-            ]:
-                button.setAutoresizingMask_(AppKit.NSViewMaxXMargin | AppKit.NSViewMaxYMargin)
-                content.addSubview_(button)
+            window_menu_item = AppKit.NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("", None, "")
+            window_menu = AppKit.NSMenu.alloc().initWithTitle_("窗口")
+            window_menu.addItemWithTitle_action_keyEquivalent_("最小化", "performMiniaturize:", "m")
+            window_menu.addItemWithTitle_action_keyEquivalent_("缩放", "performZoom:", "")
+            window_menu.addItemWithTitle_action_keyEquivalent_("关闭窗口", "performClose:", "w")
+            window_menu_item.setSubmenu_(window_menu)
+            main_menu.addItem_(window_menu_item)
+
+            self._main_menu = main_menu
+            self._window_menu = window_menu
+            AppKit.NSApp.setMainMenu_(main_menu)
+            AppKit.NSApp.setWindowsMenu_(window_menu)
 
         @python_method
         def _make_label(
@@ -294,6 +247,7 @@ if AppKit is not None and Foundation is not None and objc is not None:
         ) -> Any:
             field = AppKit.NSTextField.alloc().initWithFrame_(frame)
             field.setBezeled_(False)
+            field.setBordered_(False)
             field.setDrawsBackground_(False)
             field.setEditable_(False)
             field.setSelectable_(False)
@@ -314,236 +268,86 @@ if AppKit is not None and Foundation is not None and objc is not None:
             return button
 
         @python_method
-        def _reload_summary_fields(self) -> None:
-            current = self._overview.get("current", {})
-            items = current_summary_items(
-                self.current_provider,
-                current,
-                account_count=len(self._accounts),
-            )
-            for title, value in items:
-                field = self.summary_fields.get(title)
-                if field is not None:
-                    field.setStringValue_(value)
-            self.provider_popup.selectItemWithTitle_(provider_label(self.current_provider))
-
-        @python_method
-        def _restore_selection(self) -> None:
-            if not self._rows:
-                self.table_view.deselectAll_(None)
-                self._selected_account_id = None
-                return
-
-            selected_index = 0
-            if self._selected_account_id:
-                for index, row in enumerate(self._rows):
-                    if row["id"] == self._selected_account_id:
-                        selected_index = index
-                        break
-            index_set = Foundation.NSIndexSet.indexSetWithIndex_(selected_index)
-            self.table_view.selectRowIndexes_byExtendingSelection_(index_set, False)
-            self._selected_account_id = str(self._rows[selected_index]["id"])
-
-        @python_method
-        def _selected_slot(self) -> dict[str, Any]:
-            row = int(self.table_view.selectedRow())
-            if row < 0 or row >= len(self._accounts):
-                raise AuthHubError("请先在下方选中一个已保存账号。")
-            self._selected_account_id = str(self._accounts[row]["id"])
-            return self._accounts[row]
-
-        @python_method
         def _set_status(self, message: str, *, error: bool = False) -> None:
+            if self.status_label is None:
+                return
             self.status_label.setStringValue_(message)
             color = AppKit.NSColor.systemRedColor() if error else AppKit.NSColor.secondaryLabelColor()
             self.status_label.setTextColor_(color)
 
         @python_method
-        def _show_error(self, title: str, message: str) -> None:
-            alert = AppKit.NSAlert.alloc().init()
-            alert.setAlertStyle_(AppKit.NSAlertStyleWarning)
-            alert.setMessageText_(title)
-            alert.setInformativeText_(message)
-            alert.runModal()
+        def _dashboard_url(self) -> str:
+            if self.open_dashboard is None:
+                raise AuthHubError("控制台窗口尚未配置。")
+            url = str(self.open_dashboard() or "").strip()
+            if not url:
+                raise AuthHubError("无法解析本地控制台地址。")
+            return url
 
         @python_method
-        def _show_rename_prompt(self, current_label: str) -> str | None:
-            alert = AppKit.NSAlert.alloc().init()
-            alert.setMessageText_("重命名账号")
-            alert.setInformativeText_("给这个账号起一个更容易识别的名字。")
-            text_field = AppKit.NSTextField.alloc().initWithFrame_(Foundation.NSMakeRect(0, 0, 280, 24))
-            text_field.setStringValue_(current_label)
-            alert.setAccessoryView_(text_field)
-            alert.addButtonWithTitle_("保存")
-            alert.addButtonWithTitle_("取消")
-            result = alert.runModal()
-            if result != AppKit.NSAlertFirstButtonReturn:
-                return None
-            next_label = str(text_field.stringValue() or "").strip()
-            return next_label or None
+        def _ensure_dashboard_loaded(self, *, force_reload: bool = False) -> str:
+            url = self._dashboard_url()
+            self._load_url(url, force_reload=force_reload)
+            self._set_status("应用内控制台已连接")
+            return url
 
         @python_method
-        def _confirm_delete(self, slot_label: str) -> bool:
-            alert = AppKit.NSAlert.alloc().init()
-            alert.setMessageText_(f"删除 {slot_label}")
-            alert.setInformativeText_("这会删除已保存快照，但不会删除当前正在使用的凭据。")
-            alert.addButtonWithTitle_("删除")
-            alert.addButtonWithTitle_("取消")
-            return alert.runModal() == AppKit.NSAlertFirstButtonReturn
+        def _load_url(self, url: str, *, force_reload: bool = False) -> None:
+            if self.web_view is None:
+                raise AuthHubError("控制台窗口尚未初始化。")
 
-        @python_method
-        def _update_action_buttons(self) -> None:
-            has_rows = bool(self._rows)
-            selected_exists = False
-            if has_rows:
-                row = int(self.table_view.selectedRow())
-                if 0 <= row < len(self._rows):
-                    selected_exists = bool(self._rows[row]["exists"])
+            if self.url_label is not None:
+                self.url_label.setStringValue_(url)
 
-            self.switch_button.setEnabled_(has_rows and selected_exists)
-            self.capture_button.setEnabled_(has_rows)
-            self.rename_button.setEnabled_(has_rows)
-            self.delete_button.setEnabled_(has_rows and selected_exists)
-
-        def numberOfRowsInTableView_(self, _table_view: Any) -> int:
-            return len(self._rows)
-
-        def tableView_objectValueForTableColumn_row_(
-            self,
-            _table_view: Any,
-            table_column: Any,
-            row: int,
-        ) -> str:
-            identifier = str(table_column.identifier())
-            return str(self._rows[row].get(identifier) or "")
-
-        def tableViewSelectionDidChange_(self, _notification: Any) -> None:
-            row = int(self.table_view.selectedRow())
-            if 0 <= row < len(self._rows):
-                self._selected_account_id = str(self._rows[row]["id"])
-            self._update_action_buttons()
-
-        def providerChanged_(self, sender: Any) -> None:
-            title = str(sender.titleOfSelectedItem() or "")
-            provider = self.provider_titles.get(title)
-            if provider:
-                self.current_provider = provider
-                self._selected_account_id = None
-                self.reload_data()
-
-        def refreshClicked_(self, _sender: Any) -> None:
-            self.reload_data("已刷新原生控制台")
-
-        def saveCurrentAsNew_(self, _sender: Any) -> None:
-            try:
-                payload = self.hub.create_account_from_current(self.current_provider)
-            except AuthHubError as exc:
-                self._show_error("保存失败", str(exc))
+            if not force_reload and self._current_url == url:
                 return
 
-            snapshot = payload.get("snapshot", {})
-            identity = str(snapshot.get("email") or snapshot.get("name") or snapshot.get("account_id") or "当前登录")
-            if payload.get("created_new_account"):
-                status_message = f"已保存为新账号：{identity}"
-            else:
-                status_message = f"已更新已有账号：{identity}"
-            self.reload_data(status_message)
+            ns_url = Foundation.NSURL.URLWithString_(url)
+            if ns_url is None:
+                raise AuthHubError(f"控制台地址无效：{url}")
 
-        def openWebConsole_(self, _sender: Any) -> None:
+            request = Foundation.NSURLRequest.requestWithURL_(ns_url)
+            self.web_view.loadRequest_(request)
+            self._current_url = url
+
+        def refreshClicked_(self, _sender: Any) -> None:
             try:
-                url = self.open_dashboard()
-            except OSError as exc:
-                self._show_error("无法启动网页控制台", str(exc))
+                self._ensure_dashboard_loaded(force_reload=True)
+            except AuthHubError as exc:
+                self._set_status(str(exc), error=True)
+
+        def openInBrowserClicked_(self, _sender: Any) -> None:
+            try:
+                url = self._dashboard_url()
+            except AuthHubError as exc:
+                self._set_status(str(exc), error=True)
                 return
 
             webbrowser.open(url)
-            self._set_status(f"已打开网页控制台：{url}")
+            self._set_status("已在浏览器中打开本地控制台")
 
-        def switchSelectedAccount_(self, _sender: Any) -> None:
-            try:
-                slot = self._selected_slot()
-                self.hub.switch(self.current_provider, str(slot["id"]))
-            except AuthHubError as exc:
-                self._show_error("切换失败", str(exc))
-                return
-
-            self.reload_data(f"已切换到 {slot_table_row(slot)['label']}")
-
-        def captureSelectedAccount_(self, _sender: Any) -> None:
-            try:
-                slot = self._selected_slot()
-                payload = self.hub.save_current_to_account(self.current_provider, str(slot["id"]))
-            except AuthHubError as exc:
-                self._show_error("保存失败", str(exc))
-                return
-
-            moved = payload.get("cleared_account_ids") or payload.get("cleared_slot_ids") or []
-            message = f"已用当前登录覆盖 {slot_table_row(slot)['label']}"
-            if moved:
-                message += f"；并移除重复账号 {', '.join(moved)}"
-            self.reload_data(message)
-
-        def renameSelectedAccount_(self, _sender: Any) -> None:
-            try:
-                slot = self._selected_slot()
-            except AuthHubError as exc:
-                self._show_error("无法重命名", str(exc))
-                return
-
-            current_label = str(slot_table_row(slot)["label"])
-            next_label = self._show_rename_prompt(current_label)
-            if not next_label or next_label == current_label:
-                return
-
-            try:
-                self.hub.rename_account(self.current_provider, str(slot["id"]), next_label)
-            except AuthHubError as exc:
-                self._show_error("重命名失败", str(exc))
-                return
-
-            self.reload_data(f"已重命名为 {next_label}")
-
-        def deleteSelectedAccount_(self, _sender: Any) -> None:
-            try:
-                slot = self._selected_slot()
-            except AuthHubError as exc:
-                self._show_error("无法删除", str(exc))
-                return
-
-            slot_label = str(slot_table_row(slot)["label"])
-            if not self._confirm_delete(slot_label):
-                return
-
-            try:
-                self.hub.delete_account(self.current_provider, str(slot["id"]))
-            except AuthHubError as exc:
-                self._show_error("删除失败", str(exc))
-                return
-
-            self._selected_account_id = None
-            self.reload_data(f"已删除 {slot_label}")
+        def windowWillClose_(self, _notification: Any) -> None:
+            self._set_foreground_mode(False)
 else:
-    _HubWindowController = None
+    _DashboardWindowController = None
 
 
 class NativeHubWindow:
-    def __init__(
-        self,
-        hub: UnifiedAuthHub,
-        *,
-        open_dashboard: Callable[[], str],
-    ) -> None:
-        if _HubWindowController is None:
+    def __init__(self, *, open_dashboard: Callable[[], str]) -> None:
+        if _DashboardWindowController is None:
             raise AuthHubError(
-                "native app window requires AppKit/PyObjC; run `python3 -m pip install -e .` inside the project venv first"
+                "embedded control center requires AppKit, PyObjC and pyobjc-framework-WebKit in the project venv"
             )
 
-        controller = _HubWindowController.alloc().init()
-        controller.configure(hub, open_dashboard)
+        controller = _DashboardWindowController.alloc().init()
+        controller.configure(open_dashboard)
         self._controller = controller
 
     def show(self) -> None:
         self._controller.show()
 
     def reload_data(self) -> None:
-        self._controller.reload_data()
+        self._controller.reload()
+
+    def close(self) -> None:
+        self._controller.close()
