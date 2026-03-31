@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Account Hub Icon Drafts</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #091018;
+        --panel: rgba(18, 25, 38, 0.88);
+        --line: rgba(255, 255, 255, 0.08);
+        --text: #eef3fb;
+        --muted: #94a4bb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(84, 122, 205, 0.15), transparent 42%),
+          radial-gradient(circle at left bottom, rgba(255, 149, 67, 0.12), transparent 36%),
+          var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        max-width: 1360px;
+        margin: 0 auto;
+        padding: 36px 28px 48px;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: 34px;
+        line-height: 1.1;
+      }
+
+      .intro {
+        margin: 0 0 28px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .card {
+        padding: 18px 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--panel);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+      }
+
+      .art {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      h2 {
+        margin: 16px 0 8px;
+        font-size: 18px;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .meta {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #6f839f;
+      }
+
+      @media (max-width: 1080px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Agent Account Hub 图标草案</h1>
+      <p class="intro">先只看 Dock / 启动台图标方向，不考虑右上角菜单栏状态图。三版都偏向“多账号中枢”，只是抽象程度不同。</p>
+
+      <div class="grid">
+        <section class="card">
+          <img class="art" src="icon-draft-a-cards.svg" alt="Draft A - Cards" />
+          <h2>A. 双卡片中枢</h2>
+          <p>最直观，重点表达“账号卡片 + 中心切换”。适合偏工具型、好理解的方向。</p>
+          <div class="meta">文件：icon-draft-a-cards.svg</div>
+        </section>
+
+        <section class="card">
+          <img class="art" src="icon-draft-b-orbit.svg" alt="Draft B - Orbit" />
+          <h2>B. 双环轨道</h2>
+          <p>更抽象、更像成熟桌面应用图标。中心是 Hub，两侧是不同 provider / 账号载体。</p>
+          <div class="meta">文件：icon-draft-b-orbit.svg</div>
+        </section>
+
+        <section class="card">
+          <img class="art" src="icon-draft-c-stack.svg" alt="Draft C - Stack" />
+          <h2>C. 三账号堆栈</h2>
+          <p>更偏“多账号管理”本身，信息感更强，但没有 B 那么简洁。</p>
+          <div class="meta">文件：icon-draft-c-stack.svg</div>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

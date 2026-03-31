@@ -14,10 +14,12 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from .core import (
+    APP_DISPLAY_NAME,
     AuthHub,
     AuthHubError,
     PROJECT_ROOT,
     auth_identity_key,
+    atomic_write_bytes,
     atomic_write_json,
     build_auth_summary,
     default_data_root,
@@ -42,9 +44,19 @@ CODEX_USAGE_UNAUTHORIZED_BACKOFF_SECONDS = 6 * 60 * 60
 CODEX_USAGE_RATE_LIMIT_BACKOFF_SECONDS = 3 * 60 * 60
 DEFAULT_CLAUDE_CODE_KEYCHAIN_SERVICE = "Claude Code-credentials"
 DEFAULT_CLAUDE_PROFILE_PATH = Path.home() / ".claude.json"
+DEFAULT_CLAUDE_CONFIG_DIR = Path.home() / ".claude"
 DEFAULT_CLAUDE_USAGE_SESSION_KEYCHAIN_SERVICE = "Agent Account Hub-claude.ai-session"
 CLAUDE_AI_API_BASE_URL = "https://claude.ai/api"
 CLAUDE_USAGE_STALE_SECONDS = 15 * 60
+CLAUDE_STATUSLINE_SCRIPT_NAME = "agent-account-hub-statusline.pl"
+CLAUDE_STATUSLINE_WRAPPER_NAME = "agent-account-hub-statusline.sh"
+
+
+def current_claude_config_dir() -> Path:
+    override = os.environ.get("CLAUDE_CONFIG_DIR")
+    if override:
+        return Path(override).expanduser()
+    return DEFAULT_CLAUDE_CONFIG_DIR
 
 
 def provider_label(provider: str) -> str:
@@ -273,6 +285,472 @@ def empty_claude_usage_display_preferences(path: str) -> dict[str, Any]:
         "path": path,
         "selected_account_ids": [],
     }
+
+
+def empty_claude_statusline_preferences(path: str) -> dict[str, Any]:
+    return {
+        "path": path,
+        "show_directory": True,
+        "show_model": True,
+        "show_account": True,
+        "show_context": True,
+        "show_usage": True,
+        "show_progress_bar": True,
+        "show_pace_marker": True,
+        "show_reset_time": True,
+        "show_seven_day_usage": False,
+        "show_seven_day_progress_bar": True,
+        "show_seven_day_pace_marker": True,
+        "show_seven_day_reset_time": True,
+        "show_seven_day_label": True,
+        "show_context_label": True,
+        "show_usage_label": True,
+        "show_reset_label": True,
+        "use_24_hour_time": False,
+        "bar_width": 10,
+        "separator": " │ ",
+        "updated_at": None,
+    }
+
+
+def normalize_claude_statusline_preferences(path: str, stored: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = empty_claude_statusline_preferences(path)
+    stored = stored if isinstance(stored, dict) else {}
+    bool_fields = (
+        "show_directory",
+        "show_model",
+        "show_account",
+        "show_context",
+        "show_usage",
+        "show_progress_bar",
+        "show_pace_marker",
+        "show_reset_time",
+        "show_seven_day_usage",
+        "show_seven_day_progress_bar",
+        "show_seven_day_pace_marker",
+        "show_seven_day_reset_time",
+        "show_seven_day_label",
+        "show_context_label",
+        "show_usage_label",
+        "show_reset_label",
+        "use_24_hour_time",
+    )
+    for field in bool_fields:
+        if field in stored:
+            payload[field] = bool(stored.get(field))
+
+    try:
+        bar_width = int(stored.get("bar_width"))
+    except (TypeError, ValueError):
+        bar_width = payload["bar_width"]
+    payload["bar_width"] = max(6, min(16, bar_width))
+
+    separator = str(stored.get("separator") or "")
+    if separator and separator.strip():
+        payload["separator"] = separator
+
+    payload["updated_at"] = iso_datetime(stored.get("updated_at"))
+    return payload
+
+
+def compute_pace_marker_ratio(reset_at: Any, *, window_seconds: int = 5 * 60 * 60) -> float | None:
+    reset_dt = parse_iso_datetime(reset_at)
+    if reset_dt is None:
+        return None
+    now = datetime.now(timezone.utc)
+    start_dt = reset_dt - timedelta(seconds=window_seconds)
+    elapsed = (now - start_dt).total_seconds()
+    ratio = elapsed / window_seconds
+    return max(0.0, min(1.0, ratio))
+
+
+def build_statusline_bar(
+    percent: float | None,
+    *,
+    width: int,
+    marker_ratio: float | None = None,
+    fill_char: str = "▓",
+    empty_char: str = "░",
+    marker_char: str = "┃",
+) -> str:
+    width = max(1, width)
+    if percent is None:
+        chars = [empty_char] * width
+    else:
+        filled = max(0, min(width, int(round((percent / 100.0) * width))))
+        chars = [fill_char if index < filled else empty_char for index in range(width)]
+    if marker_ratio is not None:
+        marker_index = min(width - 1, max(0, int(marker_ratio * width)))
+        chars[marker_index] = marker_char
+    return "".join(chars)
+
+
+def format_statusline_reset(
+    reset_at: Any,
+    *,
+    use_24_hour_time: bool,
+    include_date: bool = False,
+) -> str | None:
+    parsed = parse_iso_datetime(reset_at)
+    if parsed is None:
+        return None
+    local_dt = parsed.astimezone()
+    time_pattern = "%H:%M" if use_24_hour_time else "%I:%M %p"
+    if include_date:
+        time_text = local_dt.strftime(time_pattern)
+        return f"{local_dt.month}/{local_dt.day} {local_dt.strftime('%a')} {time_text}"
+    if use_24_hour_time:
+        return local_dt.strftime("%H:%M")
+    return local_dt.strftime("%I:%M %p")
+
+
+def build_claude_statusline_preview(
+    preferences: dict[str, Any],
+    *,
+    account_label: str | None,
+    usage: dict[str, Any] | None,
+) -> str:
+    def usage_segment(
+        *,
+        percent_value: Any,
+        reset_value: Any,
+        label_text: str,
+        show_label: bool,
+        show_progress_bar: bool,
+        show_pace_marker: bool,
+        show_reset_time: bool,
+        window_seconds: int,
+        include_date_in_reset: bool = False,
+    ) -> str:
+        usage_percent = parse_cached_usage_percent(percent_value)
+        if usage_percent is None:
+            usage_percent = 0.0
+        segment = f"{int(usage_percent)}%" if usage_percent.is_integer() else f"{usage_percent:.1f}%"
+        if show_label:
+            segment = f"{label_text}: {segment}"
+        if show_progress_bar:
+            marker_ratio = (
+                compute_pace_marker_ratio(reset_value, window_seconds=window_seconds)
+                if show_pace_marker
+                else None
+            )
+            segment = (
+                f"{segment} "
+                f"{build_statusline_bar(usage_percent, width=int(preferences.get('bar_width') or 10), marker_ratio=marker_ratio)}"
+            )
+        if show_reset_time:
+            reset_text = format_statusline_reset(
+                reset_value,
+                use_24_hour_time=bool(preferences.get("use_24_hour_time")),
+                include_date=include_date_in_reset,
+            ) or (
+                "4/2 Wed 15:00"
+                if include_date_in_reset and preferences.get("use_24_hour_time")
+                else "4/2 Wed 03:00 PM"
+                if include_date_in_reset
+                else "15:00"
+                if preferences.get("use_24_hour_time")
+                else "03:00 PM"
+            )
+            reset_label = "Reset: " if preferences.get("show_reset_label") else ""
+            segment = f"{segment} → {reset_label}{reset_text}"
+        return segment
+
+    parts: list[str] = []
+    separator = str(preferences.get("separator") or " │ ")
+    if preferences.get("show_directory"):
+        parts.append("agent-account-hub")
+    if preferences.get("show_model"):
+        parts.append("Opus 4.6")
+    if preferences.get("show_account"):
+        parts.append(account_label or "当前账号")
+    if preferences.get("show_context"):
+        context_text = "0%"
+        if preferences.get("show_context_label"):
+            context_text = f"Ctx: {context_text}"
+        parts.append(context_text)
+    if preferences.get("show_usage"):
+        parts.append(
+            usage_segment(
+                percent_value=(usage or {}).get("five_hour_percent"),
+                reset_value=(usage or {}).get("five_hour_reset_at"),
+                label_text="Usage",
+                show_label=bool(preferences.get("show_usage_label")),
+                show_progress_bar=bool(preferences.get("show_progress_bar")),
+                show_pace_marker=bool(preferences.get("show_pace_marker")),
+                show_reset_time=bool(preferences.get("show_reset_time")),
+                window_seconds=5 * 60 * 60,
+                include_date_in_reset=False,
+            )
+        )
+    if preferences.get("show_seven_day_usage"):
+        parts.append(
+            usage_segment(
+                percent_value=(usage or {}).get("seven_day_percent"),
+                reset_value=(usage or {}).get("seven_day_reset_at"),
+                label_text="7d",
+                show_label=bool(preferences.get("show_seven_day_label")),
+                show_progress_bar=bool(preferences.get("show_seven_day_progress_bar")),
+                show_pace_marker=bool(preferences.get("show_seven_day_pace_marker")),
+                show_reset_time=bool(preferences.get("show_seven_day_reset_time")),
+                window_seconds=7 * 24 * 60 * 60,
+                include_date_in_reset=True,
+            )
+        )
+    return separator.join(part for part in parts if part)
+
+
+def build_claude_statusline_wrapper_script(script_path: Path) -> str:
+    return f"""#!/bin/bash
+exec /usr/bin/env perl "{script_path}" "$@"
+"""
+
+
+def build_claude_statusline_perl_script(config_path: Path, runtime_path: Path) -> str:
+    config_literal = json.dumps(str(config_path))
+    runtime_literal = json.dumps(str(runtime_path))
+    return f"""#!/usr/bin/env perl
+use strict;
+use warnings;
+use utf8;
+use JSON::PP qw(decode_json);
+use POSIX qw(strftime);
+use File::Basename qw(basename);
+
+my $config_path = {config_literal};
+my $runtime_path = {runtime_literal};
+binmode(STDIN, ':raw');
+binmode(STDOUT, ':encoding(UTF-8)');
+
+sub load_json_file {{
+  my ($path) = @_;
+  return {{}} unless defined $path && -f $path;
+  open my $fh, '<:raw', $path or return {{}};
+  local $/;
+  my $raw = <$fh>;
+  close $fh;
+  return {{}} unless defined $raw && $raw =~ /\\S/;
+  my $decoded = eval {{ decode_json($raw) }};
+  return {{}} unless ref($decoded) eq 'HASH';
+  return $decoded;
+}}
+
+sub nested_hash {{
+  my ($value, $key) = @_;
+  return {{}} unless ref($value) eq 'HASH';
+  my $child = $value->{{$key}};
+  return ref($child) eq 'HASH' ? $child : {{}};
+}}
+
+sub parse_percent {{
+  my ($value) = @_;
+  return undef unless defined $value;
+  return undef if ref($value);
+  return undef unless $value =~ /^-?\\d+(?:\\.\\d+)?$/;
+  my $number = $value + 0;
+  $number = 0 if $number < 0;
+  $number = 100 if $number > 100;
+  return sprintf('%.1f', $number) + 0;
+}}
+
+sub format_percent {{
+  my ($value) = @_;
+  return '~' unless defined $value;
+  return sprintf('%.0f%%', $value) if int($value) == $value;
+  return sprintf('%.1f%%', $value);
+}}
+
+sub parse_context_percent {{
+  my ($stdin) = @_;
+  my $context = nested_hash($stdin, 'context_window');
+  my $native = $context->{{used_percentage}};
+  my $native_percent = parse_percent($native);
+  return $native_percent if defined $native_percent;
+  my $size = $context->{{context_window_size}} || 0;
+  return 0 if !$size;
+  my $usage = nested_hash($context, 'current_usage');
+  my $total = ($usage->{{input_tokens}} || 0)
+    + ($usage->{{cache_creation_input_tokens}} || 0)
+    + ($usage->{{cache_read_input_tokens}} || 0);
+  my $percent = ($total / $size) * 100;
+  return parse_percent($percent);
+}}
+
+sub build_bar {{
+  my ($percent, $width, $marker_ratio) = @_;
+  $width = 10 unless defined $width && $width =~ /^\\d+$/;
+  $width = 6 if $width < 6;
+  $width = 16 if $width > 16;
+  my @chars = ('░') x $width;
+  if (defined $percent) {{
+    my $filled = int((($percent / 100) * $width) + 0.5);
+    $filled = 0 if $filled < 0;
+    $filled = $width if $filled > $width;
+    for (my $i = 0; $i < $filled; $i++) {{
+      $chars[$i] = '▓';
+    }}
+  }}
+  if (defined $marker_ratio) {{
+    my $index = int($marker_ratio * $width);
+    $index = 0 if $index < 0;
+    $index = $width - 1 if $index >= $width;
+    $chars[$index] = '┃';
+  }}
+  return join('', @chars);
+}}
+
+sub pace_ratio {{
+  my ($reset_epoch, $window_seconds) = @_;
+  return undef unless defined $reset_epoch && $reset_epoch =~ /^\\d+$/;
+  $window_seconds = 18000 unless defined $window_seconds && $window_seconds =~ /^\\d+$/ && $window_seconds > 0;
+  my $start_epoch = $reset_epoch - $window_seconds;
+  my $ratio = (time() - $start_epoch) / $window_seconds;
+  $ratio = 0 if $ratio < 0;
+  $ratio = 1 if $ratio > 1;
+  return $ratio;
+}}
+
+sub format_reset_time {{
+  my ($epoch, $use_24_hour, $include_date) = @_;
+  return undef unless defined $epoch && $epoch =~ /^\\d+$/;
+  if ($include_date) {{
+    my @local = localtime($epoch);
+    my $month = $local[4] + 1;
+    my $day = $local[3];
+    my $weekday = strftime('%a', @local);
+    my $time = $use_24_hour
+      ? strftime('%H:%M', @local)
+      : strftime('%I:%M %p', @local);
+    return "$month/$day $weekday $time";
+  }}
+  return $use_24_hour ? strftime('%H:%M', localtime($epoch)) : strftime('%I:%M %p', localtime($epoch));
+}}
+
+sub color_for_percent {{
+  my ($percent) = @_;
+  return \"\\e[38;5;244m\" unless defined $percent;
+  return \"\\e[38;5;196m\" if $percent >= 80;
+  return \"\\e[38;5;214m\" if $percent >= 60;
+  return \"\\e[38;5;42m\";
+}}
+
+sub maybe_color {{
+  my ($text, $ansi) = @_;
+  return $text unless defined $text && length($text);
+  return $text unless defined $ansi && length($ansi);
+  return $ansi . $text . \"\\e[0m\";
+}}
+
+my $defaults = {{
+  show_directory => JSON::PP::true,
+  show_model => JSON::PP::true,
+  show_account => JSON::PP::true,
+  show_context => JSON::PP::true,
+  show_usage => JSON::PP::true,
+  show_progress_bar => JSON::PP::true,
+  show_pace_marker => JSON::PP::true,
+  show_reset_time => JSON::PP::true,
+  show_seven_day_usage => JSON::PP::false,
+  show_seven_day_progress_bar => JSON::PP::true,
+  show_seven_day_pace_marker => JSON::PP::true,
+  show_seven_day_reset_time => JSON::PP::true,
+  show_seven_day_label => JSON::PP::true,
+  show_context_label => JSON::PP::true,
+  show_usage_label => JSON::PP::true,
+  show_reset_label => JSON::PP::true,
+  use_24_hour_time => JSON::PP::false,
+  bar_width => 10,
+  separator => ' │ ',
+}};
+my $config = load_json_file($config_path);
+for my $key (keys %$defaults) {{
+  $config->{{$key}} = $defaults->{{$key}} unless exists $config->{{$key}};
+}}
+
+my $runtime = load_json_file($runtime_path);
+
+my $raw = do {{
+  local $/;
+  <STDIN>;
+}};
+my $stdin = {{}};
+if (defined $raw && $raw =~ /\\S/) {{
+  my $decoded = eval {{ decode_json($raw) }};
+  $stdin = $decoded if ref($decoded) eq 'HASH';
+}}
+
+my $workspace = nested_hash($stdin, 'workspace');
+my $cwd = $workspace->{{current_dir}} || $stdin->{{cwd}} || '';
+my $dir = $cwd ? basename($cwd) : undef;
+my $model = nested_hash($stdin, 'model')->{{display_name}} || nested_hash($stdin, 'model')->{{id}} || 'Claude';
+my $context_percent = parse_context_percent($stdin);
+
+my $rate_limits = nested_hash($stdin, 'rate_limits');
+my $five_hour = nested_hash($rate_limits, 'five_hour');
+my $seven_day = nested_hash($rate_limits, 'seven_day');
+my $runtime_usage = nested_hash($runtime, 'usage');
+my $usage_percent = parse_percent($five_hour->{{used_percentage}});
+$usage_percent = parse_percent($runtime_usage->{{five_hour_percent}}) unless defined $usage_percent;
+my $reset_epoch = $five_hour->{{resets_at}};
+$reset_epoch = $runtime_usage->{{five_hour_reset_epoch}} unless defined $reset_epoch;
+my $seven_day_percent = parse_percent($seven_day->{{used_percentage}});
+$seven_day_percent = parse_percent($runtime_usage->{{seven_day_percent}}) unless defined $seven_day_percent;
+my $seven_day_reset_epoch = $seven_day->{{resets_at}};
+$seven_day_reset_epoch = $runtime_usage->{{seven_day_reset_epoch}} unless defined $seven_day_reset_epoch;
+
+my @parts = ();
+my $separator = $config->{{separator}} || ' │ ';
+
+if ($config->{{show_directory}} && defined $dir && length($dir)) {{
+  push @parts, maybe_color($dir, \"\\e[38;5;244m\");
+}}
+if ($config->{{show_model}} && defined $model && length($model)) {{
+  push @parts, maybe_color($model, \"\\e[38;5;45m\");
+}}
+my $account_label = $runtime->{{current_account_label}} || $runtime->{{current_email}} || undef;
+if ($config->{{show_account}} && defined $account_label && length($account_label)) {{
+  push @parts, maybe_color($account_label, \"\\e[38;5;215m\");
+}}
+if ($config->{{show_context}}) {{
+  my $ctx_text = format_percent($context_percent);
+  $ctx_text = 'Ctx: ' . $ctx_text if $config->{{show_context_label}};
+  push @parts, maybe_color($ctx_text, color_for_percent($context_percent));
+}}
+if ($config->{{show_usage}}) {{
+  my $usage_text = format_percent($usage_percent);
+  $usage_text = 'Usage: ' . $usage_text if $config->{{show_usage_label}};
+  if ($config->{{show_progress_bar}}) {{
+    my $marker_ratio = $config->{{show_pace_marker}} ? pace_ratio($reset_epoch, 18000) : undef;
+    $usage_text .= ' ' . build_bar($usage_percent, $config->{{bar_width}}, $marker_ratio);
+  }}
+  if ($config->{{show_reset_time}}) {{
+    my $reset_text = format_reset_time($reset_epoch, $config->{{use_24_hour_time}}, 0);
+    if (defined $reset_text) {{
+      my $label = $config->{{show_reset_label}} ? 'Reset: ' : '';
+      $usage_text .= ' → ' . $label . $reset_text;
+    }}
+  }}
+  push @parts, maybe_color($usage_text, color_for_percent($usage_percent));
+}}
+if ($config->{{show_seven_day_usage}}) {{
+  my $seven_day_text = format_percent($seven_day_percent);
+  $seven_day_text = '7d: ' . $seven_day_text if $config->{{show_seven_day_label}};
+  if ($config->{{show_seven_day_progress_bar}}) {{
+    my $marker_ratio = $config->{{show_seven_day_pace_marker}} ? pace_ratio($seven_day_reset_epoch, 604800) : undef;
+    $seven_day_text .= ' ' . build_bar($seven_day_percent, $config->{{bar_width}}, $marker_ratio);
+  }}
+  if ($config->{{show_seven_day_reset_time}}) {{
+    my $reset_text = format_reset_time($seven_day_reset_epoch, $config->{{use_24_hour_time}}, 1);
+    if (defined $reset_text) {{
+      my $label = $config->{{show_reset_label}} ? 'Reset: ' : '';
+      $seven_day_text .= ' → ' . $label . $reset_text;
+    }}
+  }}
+  push @parts, maybe_color($seven_day_text, color_for_percent($seven_day_percent));
+}}
+
+print join($separator, grep {{ defined($_) && length($_) }} @parts), \"\\n\";
+"""
 
 
 def parse_claude_usage_percent(value: Any) -> float | None:
@@ -1113,6 +1591,7 @@ class ClaudeCodeHubPaths:
     state_path: Path
     accounts_root: Path
     profile_path: Path = DEFAULT_CLAUDE_PROFILE_PATH
+    claude_config_dir: Path = DEFAULT_CLAUDE_CONFIG_DIR
 
     @classmethod
     def defaults(cls) -> "ClaudeCodeHubPaths":
@@ -1122,6 +1601,7 @@ class ClaudeCodeHubPaths:
             state_path=data_root / "state.json",
             accounts_root=data_root / "accounts",
             profile_path=DEFAULT_CLAUDE_PROFILE_PATH,
+            claude_config_dir=current_claude_config_dir(),
         )
 
 
@@ -1154,6 +1634,191 @@ class ClaudeCodeHub:
 
     def usage_display_preferences_path(self) -> Path:
         return self.paths.data_root / "usage_display.json"
+
+    def claude_settings_path(self) -> Path:
+        return self.paths.claude_config_dir / "settings.json"
+
+    def statusline_preferences_path(self) -> Path:
+        return self.paths.data_root / "statusline.json"
+
+    def statusline_runtime_path(self) -> Path:
+        return self.paths.data_root / "statusline-runtime.json"
+
+    def installed_statusline_script_path(self) -> Path:
+        return self.paths.claude_config_dir / CLAUDE_STATUSLINE_SCRIPT_NAME
+
+    def installed_statusline_wrapper_path(self) -> Path:
+        return self.paths.claude_config_dir / CLAUDE_STATUSLINE_WRAPPER_NAME
+
+    def load_statusline_preferences(self) -> dict[str, Any]:
+        path = self.statusline_preferences_path()
+        if not path.is_file():
+            return empty_claude_statusline_preferences(str(path))
+        try:
+            stored = load_json_file(path)
+        except (OSError, json.JSONDecodeError, AuthHubError):
+            return empty_claude_statusline_preferences(str(path))
+        return normalize_claude_statusline_preferences(str(path), stored)
+
+    def save_statusline_preferences(self, payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = normalize_claude_statusline_preferences(str(self.statusline_preferences_path()), payload)
+        normalized["updated_at"] = utc_now_iso()
+        atomic_write_json(self.statusline_preferences_path(), normalized)
+        return self.load_statusline_preferences()
+
+    def load_claude_settings(self) -> dict[str, Any]:
+        path = self.claude_settings_path()
+        if not path.is_file():
+            return {}
+        return load_json_file(path)
+
+    def save_claude_settings(self, payload: dict[str, Any]) -> None:
+        atomic_write_json(self.claude_settings_path(), payload)
+
+    def statusline_command(self) -> str:
+        return f"bash {self.installed_statusline_wrapper_path()}"
+
+    def statusline_command_matches(self, statusline_payload: Any) -> bool:
+        if not isinstance(statusline_payload, dict):
+            return False
+        if str(statusline_payload.get("type") or "").strip() != "command":
+            return False
+        command = str(statusline_payload.get("command") or "")
+        return CLAUDE_STATUSLINE_WRAPPER_NAME in command
+
+    def install_statusline_files(self) -> None:
+        self.paths.claude_config_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_bytes(
+            self.installed_statusline_script_path(),
+            build_claude_statusline_perl_script(
+                self.statusline_preferences_path(),
+                self.statusline_runtime_path(),
+            ).encode("utf-8"),
+            mode=0o755,
+        )
+        atomic_write_bytes(
+            self.installed_statusline_wrapper_path(),
+            build_claude_statusline_wrapper_script(self.installed_statusline_script_path()).encode("utf-8"),
+            mode=0o755,
+        )
+
+    def statusline_runtime_payload(self, current: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = current or self.current_overview()
+        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+        five_hour_reset = parse_iso_datetime(usage.get("five_hour_reset_at"))
+        seven_day_reset = parse_iso_datetime(usage.get("seven_day_reset_at"))
+        return {
+            "updated_at": utc_now_iso(),
+            "current_account_id": payload.get("matched_account_id"),
+            "current_account_label": payload.get("matched_account_label")
+            or payload.get("name")
+            or payload.get("email"),
+            "current_email": payload.get("email"),
+            "usage": {
+                "five_hour_percent": parse_cached_usage_percent(usage.get("five_hour_percent")),
+                "five_hour_reset_at": iso_datetime(usage.get("five_hour_reset_at")),
+                "five_hour_reset_epoch": int(five_hour_reset.timestamp()) if five_hour_reset else None,
+                "seven_day_percent": parse_cached_usage_percent(usage.get("seven_day_percent")),
+                "seven_day_reset_at": iso_datetime(usage.get("seven_day_reset_at")),
+                "seven_day_reset_epoch": int(seven_day_reset.timestamp()) if seven_day_reset else None,
+            },
+        }
+
+    def write_statusline_runtime_cache(self, current: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = self.statusline_runtime_payload(current=current)
+        atomic_write_json(self.statusline_runtime_path(), payload)
+        return payload
+
+    def statusline_preview(self, current: dict[str, Any] | None = None) -> str:
+        payload = current
+        if payload is None:
+            summary = self.current_summary()
+            matched_account_id = self.current_account_id(current_summary=summary)
+            payload = {
+                **summary,
+                "matched_account_id": matched_account_id,
+                "matched_account_label": self.account_label(matched_account_id),
+                "usage": self.saved_usage_cache(matched_account_id) if matched_account_id else empty_claude_usage_cache(""),
+            }
+        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+        return build_claude_statusline_preview(
+            self.load_statusline_preferences(),
+            account_label=str(payload.get("matched_account_label") or payload.get("name") or payload.get("email") or "").strip() or None,
+            usage=usage,
+        )
+
+    def statusline_overview(self, current: dict[str, Any] | None = None) -> dict[str, Any]:
+        preferences = self.load_statusline_preferences()
+        settings_path = self.claude_settings_path()
+        script_path = self.installed_statusline_script_path()
+        wrapper_path = self.installed_statusline_wrapper_path()
+        settings_error = None
+        settings = {}
+        try:
+            settings = self.load_claude_settings()
+        except (OSError, json.JSONDecodeError, AuthHubError) as exc:
+            settings_error = str(exc)
+        statusline_payload = settings.get("statusLine") if isinstance(settings, dict) else None
+        enabled_in_settings = self.statusline_command_matches(statusline_payload)
+        configured_command = (
+            str(statusline_payload.get("command") or "").strip()
+            if isinstance(statusline_payload, dict)
+            else None
+        )
+        current_account_id = self.current_account_id()
+        current_payload = current or {
+            **self.current_summary(),
+            "matched_account_id": current_account_id,
+            "matched_account_label": self.account_label(current_account_id),
+            "usage": self.saved_usage_cache(current_account_id) if current_account_id else empty_claude_usage_cache(""),
+        }
+        return {
+            "active": enabled_in_settings,
+            "installed": script_path.is_file() and wrapper_path.is_file(),
+            "settings_error": settings_error,
+            "settings_path": str(settings_path),
+            "script_path": str(script_path),
+            "wrapper_path": str(wrapper_path),
+            "command": self.statusline_command(),
+            "configured_command": configured_command,
+            "preferences": preferences,
+            "saved_at": preferences.get("updated_at"),
+            "preview": self.statusline_preview(current=current_payload),
+            "source": "Claude Code stdin + Agent Account Hub 本地缓存兜底",
+            "current_account_label": current_payload.get("matched_account_label")
+            or current_payload.get("name")
+            or current_payload.get("email"),
+        }
+
+    def set_statusline_preferences(self, payload: dict[str, Any]) -> dict[str, Any]:
+        current = self.current_overview()
+        merged = {**self.load_statusline_preferences(), **(payload if isinstance(payload, dict) else {})}
+        self.save_statusline_preferences(merged)
+        self.write_statusline_runtime_cache(current=current)
+        return self.statusline_overview(current=current)
+
+    def apply_statusline(self) -> dict[str, Any]:
+        current = self.current_overview()
+        self.install_statusline_files()
+        settings = self.load_claude_settings()
+        settings["statusLine"] = {
+            "type": "command",
+            "command": self.statusline_command(),
+            "padding": 0,
+        }
+        self.save_claude_settings(settings)
+        self.write_statusline_runtime_cache(current=current)
+        return self.statusline_overview(current=current)
+
+    def disable_statusline(self) -> dict[str, Any]:
+        settings = self.load_claude_settings()
+        existing = settings.get("statusLine")
+        if self.statusline_command_matches(existing):
+            settings.pop("statusLine", None)
+            self.save_claude_settings(settings)
+        current = self.current_overview()
+        self.write_statusline_runtime_cache(current=current)
+        return self.statusline_overview(current=current)
 
     def load_state(self) -> dict[str, Any]:
         if not self.paths.state_path.is_file():
@@ -1726,20 +2391,23 @@ class ClaudeCodeHub:
         current["snapshot_sync_account_id"] = sync_result.get("account_id") or matched_account_id
         current["usage_auth"] = self.saved_usage_auth(matched_account_id) if matched_account_id else empty_claude_usage_auth("")
         current["usage"] = self.saved_usage_cache(matched_account_id) if matched_account_id else empty_claude_usage_cache("")
+        self.write_statusline_runtime_cache(current=current)
         return current
 
     def overview(self) -> dict[str, Any]:
         sync_result = self.sync_current_account_snapshot()
+        current = self.current_overview(sync_result=sync_result)
         accounts = []
         for account in self.load_state()["accounts"]:
             account_id = str(account["id"])
             accounts.append(self.account_overview(account_id))
         return {
             "active_auth_path": self.backend.active_auth_path,
-            "current": self.current_overview(sync_result=sync_result),
+            "current": current,
             "accounts": accounts,
             "slots": list(accounts),
             "usage_menu_bar_accounts": self.usage_menu_bar_accounts(),
+            "statusline": self.statusline_overview(current=current),
             "project_root": str(PROJECT_ROOT),
             "data_root": str(self.paths.data_root),
         }
@@ -2015,6 +2683,7 @@ class UnifiedAuthHub:
             "usage_auto_refresh_seconds": CODEX_USAGE_MIN_REFRESH_SECONDS
             if normalized == "codex"
             else 5 * 60,
+            "statusline_integration": normalized == CLAUDE_CODE_PROVIDER_ID,
         }
         return overview
 
@@ -2078,3 +2747,24 @@ class UnifiedAuthHub:
         if update is None:
             raise AuthHubError(f"provider {provider} does not support menu bar usage selection")
         return update(account_id, visible)
+
+    def set_statusline_preferences(self, provider: str, payload: dict[str, Any]) -> dict[str, Any]:
+        hub = self.provider_hub(provider)
+        update = getattr(hub, "set_statusline_preferences", None)
+        if update is None:
+            raise AuthHubError(f"provider {provider} does not support statusline integration")
+        return update(payload)
+
+    def apply_statusline(self, provider: str) -> dict[str, Any]:
+        hub = self.provider_hub(provider)
+        apply_statusline = getattr(hub, "apply_statusline", None)
+        if apply_statusline is None:
+            raise AuthHubError(f"provider {provider} does not support statusline integration")
+        return apply_statusline()
+
+    def disable_statusline(self, provider: str) -> dict[str, Any]:
+        hub = self.provider_hub(provider)
+        disable = getattr(hub, "disable_statusline", None)
+        if disable is None:
+            raise AuthHubError(f"provider {provider} does not support statusline integration")
+        return disable()

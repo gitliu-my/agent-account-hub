@@ -13,6 +13,7 @@ from codex_account_hub.tray import (
     status_item_usage_title,
     tray_title,
     tray_usage_slots,
+    usage_progress_tone,
 )
 
 
@@ -99,6 +100,9 @@ class TrayHelpersTests(unittest.TestCase):
         self.assertEqual([slot["id"] for slot in slots], ["account-1", "account-2"])
         self.assertEqual([slot["provider_id"] for slot in slots], ["codex", "codex"])
         self.assertEqual([slot["active"] for slot in slots], [True, False])
+
+    def test_usage_progress_tone_keeps_zero_percent_green_even_if_stale(self) -> None:
+        self.assertEqual(usage_progress_tone(0, status="stale"), "good")
 
 
 if __name__ == "__main__":

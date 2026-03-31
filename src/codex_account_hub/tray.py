@@ -79,8 +79,6 @@ def usage_progress_tone(percent: Any, status: str | None = None) -> str:
         numeric = float(percent)
     except (TypeError, ValueError):
         return "warn" if status == "stale" else "muted"
-    if status == "stale":
-        return "warn"
     if numeric >= 80:
         return "bad"
     if numeric >= 60:

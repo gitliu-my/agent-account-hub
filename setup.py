@@ -8,6 +8,7 @@ from setuptools import find_packages, setup
 APP = ["scripts/CodexAccountHubTray.py"]
 OPTIONS = {
     "argv_emulation": False,
+    "iconfile": "assets/AgentAccountHub.icns",
     "plist": {
         "CFBundleName": "Agent Account Hub",
         "CFBundleDisplayName": "Agent Account Hub",

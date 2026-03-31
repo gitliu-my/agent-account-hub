@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -199,6 +200,7 @@ class ClaudeCodeHubTests(unittest.TestCase):
             state_path=root / "data" / "state.json",
             accounts_root=root / "data" / "accounts",
             profile_path=root / "profile.json",
+            claude_config_dir=root / "claude-config",
         )
         self.backend = FakeClaudeCodeBackend(
             build_claude_payload("access-one", "refresh-one"),
@@ -559,6 +561,138 @@ class ClaudeCodeHubTests(unittest.TestCase):
         self.assertFalse(account["usage_menu_bar_eligible"])
         self.assertFalse(account["usage_menu_bar_visible"])
         self.assertEqual(overview["usage_menu_bar_accounts"], [])
+
+    def test_set_statusline_preferences_saves_preview_without_applying(self) -> None:
+        self.hub.create_account_from_current()
+        self.usage_client.responses[("session-one", "org-usage-one")] = {
+            "five_hour_percent": 18.0,
+            "five_hour_reset_at": "2026-03-30T12:00:00Z",
+            "seven_day_percent": 35.0,
+            "seven_day_reset_at": "2026-04-02T12:00:00Z",
+            "seven_day_opus_percent": 11.0,
+            "seven_day_sonnet_percent": 20.0,
+        }
+        self.hub.set_usage_auth("account-1", "session-one", "org-usage-one", "Main Org")
+
+        statusline = self.hub.set_statusline_preferences(
+            {
+                "show_directory": True,
+                "show_model": True,
+                "show_account": True,
+                "show_context": True,
+                "show_usage": True,
+                "show_progress_bar": True,
+                "show_pace_marker": True,
+                "show_reset_time": True,
+                "show_seven_day_usage": True,
+                "show_seven_day_progress_bar": True,
+                "show_seven_day_pace_marker": True,
+                "show_seven_day_reset_time": True,
+                "show_seven_day_label": True,
+                "bar_width": 12,
+                "separator": " · ",
+            }
+        )
+
+        self.assertFalse(self.hub.claude_settings_path().exists())
+        self.assertFalse(self.hub.installed_statusline_script_path().is_file())
+        self.assertFalse(self.hub.installed_statusline_wrapper_path().is_file())
+        self.assertFalse(statusline["active"])
+        self.assertIn("one@example.com", statusline["preview"])
+        self.assertIn(" · ", statusline["preview"])
+        self.assertIn("7d: 35%", statusline["preview"])
+
+    def test_installed_statusline_script_renders_live_output(self) -> None:
+        self.hub.create_account_from_current()
+        self.usage_client.responses[("session-one", "org-usage-one")] = {
+            "five_hour_percent": 18.0,
+            "five_hour_reset_at": "2026-03-30T12:00:00Z",
+            "seven_day_percent": 35.0,
+            "seven_day_reset_at": "2026-04-02T12:00:00Z",
+            "seven_day_opus_percent": 11.0,
+            "seven_day_sonnet_percent": 20.0,
+        }
+        self.hub.set_usage_auth("account-1", "session-one", "org-usage-one", "Main Org")
+        self.hub.set_statusline_preferences(
+            {
+                "show_directory": True,
+                "show_model": True,
+                "show_account": True,
+                "show_context": True,
+                "show_usage": True,
+                "show_progress_bar": True,
+                "show_pace_marker": True,
+                "show_reset_time": True,
+                "show_seven_day_usage": True,
+                "show_seven_day_progress_bar": True,
+                "show_seven_day_pace_marker": True,
+                "show_seven_day_reset_time": True,
+                "show_seven_day_label": True,
+                "separator": " │ ",
+            }
+        )
+        self.hub.apply_statusline()
+
+        result = subprocess.run(
+            ["bash", str(self.hub.installed_statusline_wrapper_path())],
+            input=json.dumps(
+                {
+                    "workspace": {"current_dir": "/Users/liumingyue/app_dev/agent-account-hub"},
+                    "model": {"display_name": "Opus 4.6"},
+                    "context_window": {"used_percentage": 12},
+                    "rate_limits": {
+                        "five_hour": {"used_percentage": 18, "resets_at": 1_774_932_800},
+                        "seven_day": {"used_percentage": 35, "resets_at": 1_775_105_600},
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        self.assertIn("Opus 4.6", result.stdout)
+        self.assertIn("one@example.com", result.stdout)
+        self.assertIn("Usage: 18%", result.stdout)
+        self.assertIn("7d: 35%", result.stdout)
+        self.assertIn("Ctx: 12%", result.stdout)
+
+    def test_apply_statusline_installs_scripts_and_updates_claude_settings(self) -> None:
+        self.hub.create_account_from_current()
+        self.hub.set_statusline_preferences({"separator": " / "})
+
+        statusline = self.hub.apply_statusline()
+
+        settings = json.loads(self.hub.claude_settings_path().read_text(encoding="utf-8"))
+        self.assertEqual(settings["statusLine"]["type"], "command")
+        self.assertIn("agent-account-hub-statusline.sh", settings["statusLine"]["command"])
+        self.assertEqual(settings["statusLine"]["padding"], 0)
+        self.assertTrue(self.hub.installed_statusline_script_path().is_file())
+        self.assertTrue(self.hub.installed_statusline_wrapper_path().is_file())
+        self.assertTrue(statusline["active"])
+
+    def test_disable_statusline_removes_own_command_from_claude_settings(self) -> None:
+        self.hub.create_account_from_current()
+        self.hub.set_statusline_preferences({"separator": " / "})
+        self.hub.apply_statusline()
+
+        statusline = self.hub.disable_statusline()
+
+        settings = json.loads(self.hub.claude_settings_path().read_text(encoding="utf-8"))
+        self.assertNotIn("statusLine", settings)
+        self.assertFalse(statusline["active"])
+
+    def test_overview_exposes_statusline_state(self) -> None:
+        self.hub.create_account_from_current()
+
+        overview = self.hub.overview()
+
+        self.assertIn("statusline", overview)
+        self.assertIn("preview", overview["statusline"])
+        self.assertEqual(overview["statusline"]["current_account_label"], overview["current"]["matched_account_label"])
+        runtime_payload = json.loads(self.hub.statusline_runtime_path().read_text(encoding="utf-8"))
+        self.assertEqual(runtime_payload["current_account_label"], overview["current"]["matched_account_label"])
 
 
 class CodexUsageHubTests(unittest.TestCase):

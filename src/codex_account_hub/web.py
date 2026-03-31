@@ -34,17 +34,18 @@ INDEX_HTML = """<!doctype html>
       --accent-strong: rgba(22, 93, 99, 0.22);
       --ember: #ab5d1e;
       --ember-soft: rgba(171, 93, 30, 0.12);
-      --ok: #207753;
-      --ok-soft: rgba(32, 119, 83, 0.13);
-      --warn: #b45309;
-      --warn-soft: rgba(180, 83, 9, 0.14);
-      --bad: #b42318;
-      --bad-soft: rgba(180, 35, 24, 0.14);
+      --ok: #12c777;
+      --ok-soft: rgba(18, 199, 119, 0.16);
+      --warn: #ff9a1f;
+      --warn-soft: rgba(255, 154, 31, 0.18);
+      --bad: #ef4444;
+      --bad-soft: rgba(239, 68, 68, 0.16);
       --shadow: 0 28px 80px rgba(67, 47, 28, 0.14);
       --radius-xl: 30px;
       --radius-lg: 24px;
       --radius-md: 18px;
       --radius-sm: 14px;
+      --topbar-height: 0px;
     }
 
     * {
@@ -85,10 +86,20 @@ INDEX_HTML = """<!doctype html>
       width: min(1240px, calc(100vw - 32px));
       margin: 0 auto;
       padding: 24px 0 48px;
-      display: grid;
-      gap: 18px;
       position: relative;
       z-index: 1;
+    }
+
+    .main-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .workspace-shell {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
     }
 
     h1,
@@ -148,6 +159,10 @@ INDEX_HTML = """<!doctype html>
       animation: rise-in 520ms both;
     }
 
+    .panel[id] {
+      scroll-margin-top: calc(var(--topbar-height) + 34px);
+    }
+
     .panel::after {
       content: "";
       position: absolute;
@@ -182,10 +197,148 @@ INDEX_HTML = """<!doctype html>
       color: var(--muted);
     }
 
+    .section-side {
+      display: grid;
+      gap: 10px;
+      justify-items: end;
+      align-content: start;
+    }
+
     .topbar {
+      position: sticky;
+      top: 12px;
+      z-index: 24;
       padding: 18px 22px;
       display: grid;
       gap: 16px;
+    }
+
+    .side-nav {
+      position: sticky;
+      top: calc(var(--topbar-height) + 24px);
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .side-nav-head {
+      display: grid;
+      gap: 6px;
+    }
+
+    .side-nav-controls {
+      display: grid;
+      gap: 12px;
+    }
+
+    .side-nav-copy {
+      color: var(--muted);
+      font-size: 0.94rem;
+      line-height: 1.5;
+    }
+
+    .side-nav-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .side-nav-button {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(30, 25, 22, 0.08);
+      text-align: left;
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, color 140ms ease;
+    }
+
+    .side-nav-button:hover {
+      transform: translateX(2px);
+      color: var(--ink);
+      border-color: rgba(22, 93, 99, 0.18);
+      background: rgba(255, 255, 255, 0.86);
+    }
+
+    .side-nav-button.active {
+      color: var(--accent-deep);
+      border-color: rgba(22, 93, 99, 0.2);
+      background: rgba(22, 93, 99, 0.12);
+      box-shadow: 0 14px 28px rgba(13, 68, 72, 0.12);
+    }
+
+    .side-nav-label {
+      display: grid;
+      gap: 0;
+    }
+
+    .side-nav-title {
+      font-weight: 650;
+    }
+
+    .side-nav-index {
+      min-width: 2rem;
+      text-align: center;
+      padding: 5px 8px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      background: rgba(30, 25, 22, 0.06);
+    }
+
+    .side-nav-button.active .side-nav-index {
+      color: #fff;
+      background: var(--accent);
+    }
+
+    .content-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .side-nav .provider-strip {
+      display: grid;
+      gap: 10px;
+    }
+
+    .provider-status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .side-nav .provider-tabs {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .side-nav .provider-tab {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .side-nav .action-cluster {
+      width: 100%;
+      display: grid;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 22px;
+    }
+
+    .side-nav .action-cluster .button {
+      width: 100%;
+    }
+
+    .side-nav .sync-pill {
+      padding-left: 4px;
     }
 
     .topbar-main {
@@ -273,6 +426,10 @@ INDEX_HTML = """<!doctype html>
       color: var(--muted);
       font-size: 0.92rem;
       font-weight: 600;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .sync-pill::before {
@@ -385,6 +542,12 @@ INDEX_HTML = """<!doctype html>
 
     .button:hover:not(:disabled) {
       transform: translateY(-1px);
+    }
+
+    .button.compact {
+      min-height: 38px;
+      padding: 0 14px;
+      font-size: 0.92rem;
     }
 
     .button:disabled {
@@ -792,7 +955,14 @@ INDEX_HTML = """<!doctype html>
 
     .module-copy {
       display: grid;
-      gap: 6px;
+      gap: 4px;
+    }
+
+    .module-title-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .module-title {
@@ -804,6 +974,21 @@ INDEX_HTML = """<!doctype html>
       color: var(--muted);
       font-size: 0.95rem;
       line-height: 1.5;
+    }
+
+    .title-hint {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid rgba(30, 25, 22, 0.1);
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: help;
+      user-select: none;
     }
 
     .inline-form {
@@ -820,6 +1005,126 @@ INDEX_HTML = """<!doctype html>
 
     .inline-form-row .field-input {
       flex: 1 1 220px;
+    }
+
+    .statusline-preview {
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: rgba(24, 27, 31, 0.94);
+      color: #eef7f2;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-family: "SF Mono", "Menlo", monospace;
+      font-size: 0.84rem;
+      line-height: 1.42;
+      word-break: break-word;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      white-space: nowrap;
+    }
+
+    .statusline-form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .statusline-toggle-stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .statusline-toggle-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .statusline-toggle-section-head {
+      display: grid;
+      gap: 4px;
+    }
+
+    .statusline-toggle-section-title {
+      font-size: 0.82rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .statusline-toggle-section-note {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .statusline-toggle-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .statusline-pair-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .statusline-pair-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .statusline-pair-row .statusline-toggle {
+      min-height: 100%;
+    }
+
+    .statusline-toggle {
+      display: grid;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(30, 25, 22, 0.08);
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--ink);
+    }
+
+    .statusline-toggle input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+      margin: 0;
+    }
+
+    .statusline-toggle-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 650;
+    }
+
+    .statusline-toggle-note {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .statusline-inline-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    @media (max-width: 820px) {
+      .statusline-pair-row {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .field-select {
+      min-height: 44px;
+      border-radius: 16px;
+      border: 1px solid rgba(30, 25, 22, 0.08);
+      padding: 0 14px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--ink);
+      font: inherit;
     }
 
     .empty-state {
@@ -1144,15 +1449,15 @@ INDEX_HTML = """<!doctype html>
     }
 
     .usage-fill.good {
-      background: linear-gradient(90deg, rgba(32, 119, 83, 0.78), rgba(32, 119, 83, 1));
+      background: linear-gradient(90deg, #46e28f, #12c777);
     }
 
     .usage-fill.warn {
-      background: linear-gradient(90deg, rgba(180, 83, 9, 0.72), rgba(180, 83, 9, 1));
+      background: linear-gradient(90deg, #ffc24f, #ff9a1f);
     }
 
     .usage-fill.bad {
-      background: linear-gradient(90deg, rgba(180, 35, 24, 0.72), rgba(180, 35, 24, 1));
+      background: linear-gradient(90deg, #ff7a6e, #ef4444);
     }
 
     .usage-fill.muted {
@@ -1307,6 +1612,18 @@ INDEX_HTML = """<!doctype html>
     }
 
     @media (max-width: 1080px) {
+      .workspace-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .side-nav {
+        position: static;
+      }
+
+      .side-nav-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .masthead-grid,
       .dashboard-grid,
       .config-grid {
@@ -1345,6 +1662,10 @@ INDEX_HTML = """<!doctype html>
         align-items: stretch;
       }
 
+      .side-nav-list {
+        grid-template-columns: 1fr;
+      }
+
       .details-summary {
         padding: 16px 18px;
       }
@@ -1380,125 +1701,113 @@ INDEX_HTML = """<!doctype html>
   </style>
 </head>
 <body>
-  <main>
-    <section class="panel topbar">
-      <div class="provider-strip">
-        <div class="provider-tabs" id="provider-tabs">
-          <button class="provider-tab active" type="button" data-provider="codex">Codex</button>
-          <button class="provider-tab" type="button" data-provider="claude-code">Claude Code</button>
-        </div>
-        <div id="sync-pill" class="sync-pill">正在读取状态</div>
-      </div>
-      <div class="topbar-main">
-        <div class="section-copy topbar-copy">
+  <main class="main-stack">
+    <div class="workspace-shell">
+      <aside class="panel side-nav">
+        <div class="side-nav-head">
           <div class="eyebrow">Control Center</div>
-          <h2>账号控制台</h2>
-          <p>先在顶部切换平台，再在这个 app 内维护账号、查看用量和菜单栏展示。</p>
+          <h3>账号控制台</h3>
         </div>
-        <div class="topbar-actions">
-          <div class="action-cluster">
-            <button id="save-new-button" class="button primary" type="button">保存当前为新账号</button>
-            <button id="refresh-usage-button" class="button secondary" type="button" hidden>刷新全部用量</button>
-            <button id="refresh-button" class="button secondary" type="button">刷新状态</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <article class="panel current-panel">
-      <div class="section-head">
-        <div class="section-copy">
-          <div class="eyebrow">Active Identity</div>
-          <h2>当前活动认证</h2>
-          <p>主状态按当前 provider 的 access token 判断；展开详情时再看更细的 token 与同步状态。</p>
-        </div>
-      </div>
-
-      <div id="current-summary" class="identity-shell"></div>
-      <div id="current-details" class="detail-grid"></div>
-      <div id="current-usage-visuals" class="usage-visuals" hidden></div>
-      <details class="details-shell">
-        <summary class="details-summary">
-          <div class="details-title">
-            <span>认证详细状态</span>
-          </div>
-          <div id="current-auth-summary" class="summary-row"></div>
-        </summary>
-        <div class="details-body">
-          <div id="current-auth-details" class="detail-grid"></div>
-        </div>
-      </details>
-    </article>
-
-    <section class="panel slots-panel">
-      <div class="section-head">
-        <div class="section-copy">
-          <div class="eyebrow">Accounts</div>
-          <h2>已保存账号</h2>
-          <p>卡片只负责切换和快速操作；认证、用量和菜单栏展示配置统一放到下面的配置中心里维护。</p>
-        </div>
-        <div id="slot-summary" class="summary-row"></div>
-      </div>
-
-      <div id="slots" class="slots"></div>
-    </section>
-
-    <section class="panel config-panel">
-      <div class="section-head">
-        <div class="section-copy">
-          <div class="eyebrow">Configuration Center</div>
-          <h2>账号配置与菜单栏展示</h2>
-          <p>这里配置的是“已保存账号记录”，不会切换当前登录。你可以直接指定想编辑的账号，再分别查看 Claude Code、claude.ai 与用量状态。</p>
-        </div>
-        <div id="config-summary" class="summary-row"></div>
-      </div>
-
-      <div id="config-selector" class="config-selector"></div>
-
-      <div class="config-grid">
-        <section id="selected-slot-config" class="config-card empty"></section>
-        <section id="menu-bar-config" class="config-card empty"></section>
-      </div>
-    </section>
-
-    <section class="panel details-panel">
-      <details class="details-shell">
-        <summary class="details-summary">
-          <div class="details-title">
-            <span>工作区路径与说明</span>
-            <span class="chip muted">可选</span>
-          </div>
-          <span class="chip muted">展开</span>
-        </summary>
-        <div class="details-body">
-          <div id="workspace" class="path-stack"></div>
-
-          <div class="guide-card">
-            <div class="guide-step">Reference</div>
-            <div class="guide-title">当前认证载体说明</div>
-            <div class="guide-copy">同一个界面里管理 Codex 的 <code>~/.codex/auth.json</code>，也管理 Claude Code 的 Keychain 凭据快照。</div>
-          </div>
-
-          <div class="guide-list">
-            <div class="guide-card">
-              <div class="guide-step">Step 1</div>
-              <div class="guide-title">保存当前凭据</div>
-              <div class="guide-copy">把当前活动凭据保存成一条新的本地账号记录，之后就能直接切换回来。</div>
+        <div class="side-nav-controls">
+          <div class="provider-strip">
+            <div class="provider-tabs" id="provider-tabs">
+              <button class="provider-tab active" type="button" data-provider="codex" title="切换到 Codex 账号与用量控制台">Codex</button>
+              <button class="provider-tab" type="button" data-provider="claude-code" title="切换到 Claude Code 账号、用量与状态栏控制台">Claude</button>
             </div>
-            <div class="guide-card">
-              <div class="guide-step">Step 2</div>
-              <div class="guide-title">按账号切换</div>
-              <div class="guide-copy">切换时只更新当前 provider 真正使用的凭据载体，不会重写你的 config、session 或日志目录。</div>
-            </div>
-            <div class="guide-card">
-              <div class="guide-step">Step 3</div>
-              <div class="guide-title">同账号自动去重</div>
-              <div class="guide-copy">如果同一账号被再次保存，旧记录会自动合并，避免本地列表出现重复账号。</div>
+            <div class="provider-status-row">
+              <div id="sync-pill" class="sync-pill">正在读取状态</div>
+              <button id="refresh-button" class="button secondary compact" type="button" title="重新读取当前平台的状态、已保存账号和配置">同步</button>
             </div>
           </div>
         </div>
-      </details>
-    </section>
+        <div id="section-nav" class="side-nav-list">
+          <button class="side-nav-button active" type="button" data-target="section-current" title="查看当前 provider 的活动状态、认证明细与当前用量">
+            <span class="side-nav-label">
+              <span class="side-nav-title">当前认证</span>
+            </span>
+            <span class="side-nav-index">01</span>
+          </button>
+          <button class="side-nav-button" type="button" data-target="section-accounts" title="切换、覆盖和删除已保存账号">
+            <span class="side-nav-label">
+              <span class="side-nav-title">账号列表</span>
+            </span>
+            <span class="side-nav-index">02</span>
+          </button>
+          <button class="side-nav-button" type="button" data-target="section-config" title="统一维护认证、用量、菜单栏展示和 Claude Code 状态栏">
+            <span class="side-nav-label">
+              <span class="side-nav-title">配置中心</span>
+            </span>
+            <span class="side-nav-index">03</span>
+          </button>
+        </div>
+      </aside>
+
+      <div class="content-stack">
+        <article id="section-current" class="panel current-panel">
+          <div class="section-head">
+            <div class="section-copy">
+              <div class="eyebrow">Active Identity</div>
+              <h2>当前活动认证</h2>
+              <p>主状态按当前 provider 的 access token 判断；展开详情时再看更细的 token 与同步状态。</p>
+            </div>
+            <div class="section-side">
+              <button id="save-new-button" class="button primary" type="button" title="把当前登录保存成一条新的本地账号记录">保存当前</button>
+            </div>
+          </div>
+
+          <div id="current-summary" class="identity-shell"></div>
+          <div id="current-details" class="detail-grid"></div>
+          <div id="current-usage-visuals" class="usage-visuals" hidden></div>
+          <details class="details-shell">
+            <summary class="details-summary">
+              <div class="details-title">
+                <span>认证详细状态</span>
+              </div>
+              <div id="current-auth-summary" class="summary-row"></div>
+            </summary>
+            <div class="details-body">
+              <div id="current-auth-details" class="detail-grid"></div>
+            </div>
+          </details>
+        </article>
+
+        <section id="section-accounts" class="panel slots-panel">
+          <div class="section-head">
+            <div class="section-copy">
+              <div class="eyebrow">Accounts</div>
+              <h2>已保存账号</h2>
+              <p>卡片只负责切换和快速操作；认证、用量和菜单栏展示配置统一放到下面的配置中心里维护。</p>
+            </div>
+            <div id="slot-summary" class="summary-row"></div>
+          </div>
+
+          <div id="slots" class="slots"></div>
+        </section>
+
+        <section id="section-config" class="panel config-panel">
+          <div class="section-head">
+            <div class="section-copy">
+              <div class="eyebrow">Configuration Center</div>
+              <h2>账号配置与菜单栏展示</h2>
+              <p>这里配置的是“已保存账号记录”，不会切换当前登录。你可以直接指定想编辑的账号，再分别查看 Claude Code、claude.ai 与用量状态。</p>
+            </div>
+            <div class="section-side">
+              <button id="refresh-usage-button" class="button secondary" type="button" title="刷新当前平台下所有已配置账号的用量缓存" hidden>刷新用量</button>
+              <div id="config-summary" class="summary-row"></div>
+            </div>
+          </div>
+
+          <div id="config-selector" class="config-selector"></div>
+
+          <div class="config-grid">
+            <section id="selected-slot-config" class="config-card empty"></section>
+            <section id="menu-bar-config" class="config-card empty"></section>
+          </div>
+          <section id="statusline-config" class="config-card empty"></section>
+        </section>
+
+      </div>
+    </div>
 
     <div id="status" class="status" aria-live="polite"></div>
   </main>
@@ -1545,22 +1854,133 @@ INDEX_HTML = """<!doctype html>
   </div>
 
   <script>
-    const REFRESH_INTERVAL_MS = 20000;
+    const REFRESH_INTERVAL_MS = 60 * 1000;
     const USAGE_AUTO_REFRESH_MS = 5 * 60 * 1000;
     const PROVIDERS = {
       codex: { label: "Codex" },
       "claude-code": { label: "Claude Code" }
     };
+    const STATUSLINE_DEFAULT_PREFERENCES = {
+      show_directory: true,
+      show_model: true,
+      show_account: true,
+      show_context: true,
+      show_usage: true,
+      show_progress_bar: true,
+      show_pace_marker: true,
+      show_reset_time: true,
+      show_seven_day_usage: false,
+      show_seven_day_progress_bar: true,
+      show_seven_day_pace_marker: true,
+      show_seven_day_reset_time: true,
+      show_seven_day_label: true,
+      show_context_label: true,
+      show_usage_label: true,
+      show_reset_label: true,
+      use_24_hour_time: false,
+      bar_width: 10,
+      separator: " │ "
+    };
     const PROVIDER_STORAGE_KEY = "account-hub:selected-provider";
     let selectedProvider = normalizeProvider(window.localStorage.getItem(PROVIDER_STORAGE_KEY) || "codex");
-    let refreshPromise = null;
-    let usageRefreshPromise = null;
+    const refreshPromises = {
+      codex: null,
+      "claude-code": null
+    };
+    const usageRefreshPromises = {
+      codex: null,
+      "claude-code": null
+    };
+    const providerStateCache = {
+      codex: null,
+      "claude-code": null
+    };
+    const providerRenderedSignatures = {
+      codex: null,
+      "claude-code": null
+    };
     let latestState = null;
-    let lastUsageAutoRefreshAt = 0;
+    const lastUsageAutoRefreshAt = {
+      codex: 0,
+      "claude-code": 0
+    };
+    const statuslineDrafts = {
+      codex: null,
+      "claude-code": null
+    };
+    const statuslineDraftDirty = {
+      codex: false,
+      "claude-code": false
+    };
     const selectedSlotIds = {
       codex: null,
       "claude-code": null
     };
+
+    function sectionNavButtons() {
+      return Array.from(document.querySelectorAll("#section-nav [data-target]"));
+    }
+
+    function setActiveSectionNav(targetId) {
+      sectionNavButtons().forEach((button) => {
+        button.classList.toggle("active", button.dataset.target === targetId);
+      });
+    }
+
+    function scrollToSection(targetId) {
+      const node = document.getElementById(targetId);
+      if (!node) {
+        return;
+      }
+      node.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+      setActiveSectionNav(targetId);
+    }
+
+    function updateSectionNavFromViewport() {
+      const buttons = sectionNavButtons();
+      if (!buttons.length) {
+        return;
+      }
+      const sections = buttons
+        .map((button) => document.getElementById(button.dataset.target || ""))
+        .filter(Boolean);
+      if (!sections.length) {
+        return;
+      }
+
+      let activeSection = sections[0];
+      let bestDistance = Number.POSITIVE_INFINITY;
+      const anchor = Math.max(140, window.innerHeight * 0.24);
+
+      sections.forEach((section) => {
+        const rect = section.getBoundingClientRect();
+        const distance = Math.abs(rect.top - anchor);
+        if (rect.top <= anchor && distance <= bestDistance) {
+          activeSection = section;
+          bestDistance = distance;
+          return;
+        }
+        if (bestDistance === Number.POSITIVE_INFINITY && distance < bestDistance) {
+          activeSection = section;
+          bestDistance = distance;
+        }
+      });
+
+      setActiveSectionNav(activeSection.id);
+    }
+
+    function updateStickyLayoutMetrics() {
+      const topbar = document.querySelector(".topbar");
+      if (!topbar) {
+        document.documentElement.style.setProperty("--topbar-height", "0px");
+        return;
+      }
+      const height = Math.ceil(topbar.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--topbar-height", height + "px");
+    }
 
     function normalizeProvider(value) {
       return value === "claude-code" ? "claude-code" : "codex";
@@ -1568,6 +1988,14 @@ INDEX_HTML = """<!doctype html>
 
     function providerMeta() {
       return PROVIDERS[selectedProvider] || PROVIDERS.codex;
+    }
+
+    function providerSyncLabel(provider = selectedProvider) {
+      return provider === "claude-code" ? "Claude" : "Codex";
+    }
+
+    function stateSignature(state) {
+      return JSON.stringify(state ?? null);
     }
 
     function providerStatePath() {
@@ -1580,6 +2008,10 @@ INDEX_HTML = """<!doctype html>
 
     function providerSupportsUsage(state = latestState) {
       return Boolean(state && state.capabilities && state.capabilities.usage_tracking);
+    }
+
+    function providerSupportsStatusline(state = latestState) {
+      return Boolean(state && state.capabilities && state.capabilities.statusline_integration);
     }
 
     function usageAuthMode(state = latestState) {
@@ -1600,6 +2032,226 @@ INDEX_HTML = """<!doctype html>
 
     function providerUsesIdToken() {
       return selectedProvider === "codex";
+    }
+
+    function currentStatusline(state = latestState) {
+      return (state && state.statusline) || null;
+    }
+
+    function baseStatuslinePreferences(state = latestState) {
+      const statusline = currentStatusline(state) || {};
+      return {
+        ...STATUSLINE_DEFAULT_PREFERENCES,
+        ...(statusline.preferences || {})
+      };
+    }
+
+    function hasDirtyStatuslineDraft(provider = selectedProvider) {
+      return Boolean(statuslineDraftDirty[provider]);
+    }
+
+    function effectiveStatuslinePreferences(state = latestState) {
+      if (hasDirtyStatuslineDraft()) {
+        return {
+          ...STATUSLINE_DEFAULT_PREFERENCES,
+          ...(statuslineDrafts[selectedProvider] || {})
+        };
+      }
+      return baseStatuslinePreferences(state);
+    }
+
+    function statuslineDraftFromForm(form) {
+      const formData = new FormData(form);
+      return {
+        show_directory: formData.get("show_directory") === "on",
+        show_model: formData.get("show_model") === "on",
+        show_account: formData.get("show_account") === "on",
+        show_context: formData.get("show_context") === "on",
+        show_usage: formData.get("show_usage") === "on",
+        show_progress_bar: formData.get("show_progress_bar") === "on",
+        show_pace_marker: formData.get("show_pace_marker") === "on",
+        show_reset_time: formData.get("show_reset_time") === "on",
+        show_seven_day_usage: formData.get("show_seven_day_usage") === "on",
+        show_seven_day_progress_bar: formData.get("show_seven_day_progress_bar") === "on",
+        show_seven_day_pace_marker: formData.get("show_seven_day_pace_marker") === "on",
+        show_seven_day_reset_time: formData.get("show_seven_day_reset_time") === "on",
+        show_seven_day_label: formData.get("show_seven_day_label") === "on",
+        show_context_label: formData.get("show_context_label") === "on",
+        show_usage_label: formData.get("show_usage_label") === "on",
+        show_reset_label: formData.get("show_reset_label") === "on",
+        use_24_hour_time: formData.get("use_24_hour_time") === "on",
+        bar_width: Number(formData.get("bar_width") || STATUSLINE_DEFAULT_PREFERENCES.bar_width),
+        separator: String(formData.get("separator") || STATUSLINE_DEFAULT_PREFERENCES.separator)
+      };
+    }
+
+    function formatStatuslineResetPreview(resetAt, use24HourTime, includeDate = false) {
+      const fallbackTime = use24HourTime ? "15:00" : "03:00 PM";
+      const fallbackDateTime = use24HourTime ? "4/2 Wed 15:00" : "4/2 Wed 03:00 PM";
+      if (!resetAt) {
+        return includeDate ? fallbackDateTime : fallbackTime;
+      }
+      const parsed = new Date(resetAt);
+      if (Number.isNaN(parsed.getTime())) {
+        return includeDate ? fallbackDateTime : fallbackTime;
+      }
+      const timeText = parsed.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: !use24HourTime
+      });
+      if (!includeDate) {
+        return timeText;
+      }
+      const month = parsed.getMonth() + 1;
+      const day = parsed.getDate();
+      const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][parsed.getDay()] || "";
+      return month + "/" + day + " " + weekday + " " + timeText;
+    }
+
+    function computeStatuslinePaceRatio(resetAt) {
+      if (!resetAt) {
+        return null;
+      }
+      const reset = new Date(resetAt);
+      if (Number.isNaN(reset.getTime())) {
+        return null;
+      }
+      const windowMs = 5 * 60 * 60 * 1000;
+      const start = reset.getTime() - windowMs;
+      const ratio = (Date.now() - start) / windowMs;
+      return Math.max(0, Math.min(1, ratio));
+    }
+
+    function buildStatuslineBarPreview(percent, width, markerRatio = null) {
+      const total = Math.max(1, Number(width) || STATUSLINE_DEFAULT_PREFERENCES.bar_width);
+      const filledCount = percent === null || percent === undefined
+        ? 0
+        : Math.max(0, Math.min(total, Math.round((Number(percent) / 100) * total)));
+      const chars = Array.from({ length: total }, (_, index) => (index < filledCount ? "▓" : "░"));
+      if (markerRatio !== null && markerRatio !== undefined) {
+        const markerIndex = Math.max(0, Math.min(total - 1, Math.floor(markerRatio * total)));
+        chars[markerIndex] = "┃";
+      }
+      return chars.join("");
+    }
+
+    function buildStatuslinePreviewText(preferences, state = latestState) {
+      const statusline = currentStatusline(state) || {};
+      const usage = (state && state.current && state.current.usage) || {};
+      const parts = [];
+      const separator = String(preferences.separator || STATUSLINE_DEFAULT_PREFERENCES.separator);
+      const usageSegment = ({
+        percentValue,
+        resetAt,
+        labelText,
+        showLabel,
+        showProgressBar,
+        showPaceMarker,
+        showResetTime,
+        windowMs,
+        includeDateInReset = false
+      }) => {
+        const numeric = Number(percentValue);
+        const usagePercent = Number.isFinite(numeric) ? numeric : 0;
+        const rounded = Math.round(usagePercent * 10) / 10;
+        let segment = (Math.abs(rounded % 1) < 0.001 ? rounded.toFixed(0) : rounded.toFixed(1)) + "%";
+        if (showLabel) {
+          segment = labelText + ": " + segment;
+        }
+        if (showProgressBar) {
+          const markerRatio = showPaceMarker
+            ? (() => {
+                if (!resetAt) {
+                  return null;
+                }
+                const parsed = new Date(resetAt);
+                if (Number.isNaN(parsed.getTime())) {
+                  return null;
+                }
+                const start = parsed.getTime() - windowMs;
+                const ratio = (Date.now() - start) / windowMs;
+                return Math.max(0, Math.min(1, ratio));
+              })()
+            : null;
+          segment += " " + buildStatuslineBarPreview(usagePercent, preferences.bar_width, markerRatio);
+        }
+        if (showResetTime) {
+          const resetLabel = preferences.show_reset_label ? "Reset: " : "";
+          segment += " → " + resetLabel + formatStatuslineResetPreview(
+            resetAt,
+            Boolean(preferences.use_24_hour_time),
+            includeDateInReset
+          );
+        }
+        return segment;
+      };
+
+      if (preferences.show_directory) {
+        parts.push("agent-account-hub");
+      }
+      if (preferences.show_model) {
+        parts.push("Opus 4.6");
+      }
+      if (preferences.show_account) {
+        parts.push(statusline.current_account_label || "当前账号");
+      }
+      if (preferences.show_context) {
+        let contextText = "0%";
+        if (preferences.show_context_label) {
+          contextText = "Ctx: " + contextText;
+        }
+        parts.push(contextText);
+      }
+      if (preferences.show_usage) {
+        parts.push(
+          usageSegment({
+            percentValue: usage.five_hour_percent,
+            resetAt: usage.five_hour_reset_at,
+            labelText: "Usage",
+            showLabel: Boolean(preferences.show_usage_label),
+            showProgressBar: Boolean(preferences.show_progress_bar),
+            showPaceMarker: Boolean(preferences.show_pace_marker),
+            showResetTime: Boolean(preferences.show_reset_time),
+            windowMs: 5 * 60 * 60 * 1000,
+            includeDateInReset: false
+          })
+        );
+      }
+      if (preferences.show_seven_day_usage) {
+        parts.push(
+          usageSegment({
+            percentValue: usage.seven_day_percent,
+            resetAt: usage.seven_day_reset_at,
+            labelText: "7d",
+            showLabel: Boolean(preferences.show_seven_day_label),
+            showProgressBar: Boolean(preferences.show_seven_day_progress_bar),
+            showPaceMarker: Boolean(preferences.show_seven_day_pace_marker),
+            showResetTime: Boolean(preferences.show_seven_day_reset_time),
+            windowMs: 7 * 24 * 60 * 60 * 1000,
+            includeDateInReset: true
+          })
+        );
+      }
+      return parts.filter(Boolean).join(separator);
+    }
+
+    function updateStatuslinePreviewFromDraft(state = latestState) {
+      const previewNode = document.getElementById("statusline-preview-text");
+      if (!previewNode) {
+        return;
+      }
+      previewNode.textContent = buildStatuslinePreviewText(effectiveStatuslinePreferences(state), state);
+      const draftChip = document.getElementById("statusline-draft-chip");
+      if (draftChip) {
+        if (hasDirtyStatuslineDraft()) {
+          draftChip.hidden = false;
+          draftChip.textContent = "有未保存更改";
+        } else {
+          draftChip.hidden = true;
+          draftChip.textContent = "";
+        }
+      }
     }
 
     function selectedSlotId() {
@@ -1718,7 +2370,7 @@ INDEX_HTML = """<!doctype html>
         return false;
       }
       const tag = String(active.tagName || "").toLowerCase();
-      return tag === "input" || tag === "textarea" || active.isContentEditable;
+      return tag === "input" || tag === "textarea" || tag === "select" || active.isContentEditable;
     }
 
     function slotToken(slot, index) {
@@ -2181,10 +2833,34 @@ INDEX_HTML = """<!doctype html>
 
     function pathCard(label, value, caption) {
       return `
-        <div class="path-card">
+        <div class="path-card" title="${escapeHtml(caption || "")}">
           <div class="path-label">${escapeHtml(label)}</div>
           <div class="path-value">${text(value)}</div>
-          <div class="guide-copy">${text(caption)}</div>
+        </div>
+      `;
+    }
+
+    function titleHint(hint) {
+      if (!hint) {
+        return "";
+      }
+      return `<span class="title-hint" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}">?</span>`;
+    }
+
+    function titledModuleTitle(label, hint = "") {
+      return `
+        <div class="module-title-row">
+          <div class="module-title">${escapeHtml(label)}</div>
+          ${titleHint(hint)}
+        </div>
+      `;
+    }
+
+    function titledSectionTitle(label, hint = "") {
+      return `
+        <div class="module-title-row">
+          <div class="statusline-toggle-section-title">${escapeHtml(label)}</div>
+          ${titleHint(hint)}
         </div>
       `;
     }
@@ -2328,8 +3004,92 @@ INDEX_HTML = """<!doctype html>
       document.getElementById("current-auth-details").innerHTML = renderAuthDetailCards(current);
     }
 
+    function renderLoadingProviderState(provider) {
+      const label = (PROVIDERS[provider] && PROVIDERS[provider].label) || "目标平台";
+      const supportsStatusline = provider === "claude-code";
+      latestState = null;
+
+      document.getElementById("current-summary").innerHTML = `
+        <div class="identity-avatar">${escapeHtml(label.slice(0, 1).toUpperCase())}</div>
+        <div class="identity-copy">
+          <div class="identity-overline">Switching Provider</div>
+          <div class="identity-title">正在切换到 ${escapeHtml(label)}</div>
+          <div class="identity-subtitle">正在读取这个平台的当前认证、账号列表和配置。</div>
+          <div class="chip-row">${chip("载入中", "accent")}</div>
+        </div>
+      `;
+      document.getElementById("current-details").innerHTML = `
+        ${detailCard("当前平台", label)}
+        ${detailCard("状态", "正在读取")}
+      `;
+      document.getElementById("current-usage-visuals").hidden = true;
+      document.getElementById("current-usage-visuals").innerHTML = "";
+      document.getElementById("current-auth-summary").innerHTML = chip("载入中", "muted");
+      document.getElementById("current-auth-details").innerHTML = `
+        ${detailCard("认证明细", "正在读取")}
+        ${detailCard("用量状态", "正在读取")}
+      `;
+
+      document.getElementById("slot-summary").innerHTML = chip("正在读取 " + label + " 账号", "muted");
+      document.getElementById("slots").innerHTML = `
+        <article class="slot-card empty">
+          <div class="slot-title-wrap">
+            <h3>正在读取 ${escapeHtml(label)} 账号</h3>
+            <div class="slot-id">请稍候，新的 provider 数据马上回来。</div>
+          </div>
+        </article>
+      `;
+
+      document.getElementById("config-summary").innerHTML = chip("正在切换到 " + label, "accent");
+      document.getElementById("config-selector").innerHTML = "";
+      document.getElementById("selected-slot-config").className = "config-card empty";
+      document.getElementById("selected-slot-config").innerHTML = `
+        <div class="empty-state">正在读取 ${escapeHtml(label)} 的账号配置…</div>
+      `;
+      document.getElementById("menu-bar-config").className = "config-card empty";
+      document.getElementById("menu-bar-config").innerHTML = `
+        <div class="empty-state">正在准备 ${escapeHtml(label)} 的菜单栏与用量配置…</div>
+      `;
+
+      const statuslineNode = document.getElementById("statusline-config");
+      if (supportsStatusline) {
+        statuslineNode.hidden = false;
+        statuslineNode.className = "config-card empty";
+        statuslineNode.innerHTML = `
+          <div class="empty-state">正在读取 Claude Code 状态栏配置…</div>
+        `;
+      } else {
+        statuslineNode.hidden = true;
+        statuslineNode.className = "config-card empty";
+        statuslineNode.innerHTML = "";
+      }
+
+      document.getElementById("refresh-usage-button").hidden = false;
+    }
+
+    function renderOverviewState(state, provider = selectedProvider) {
+      const normalizedProvider = normalizeProvider(provider);
+      latestState = state;
+      providerStateCache[normalizedProvider] = state;
+      providerRenderedSignatures[normalizedProvider] = stateSignature(state);
+      renderCurrent(state.current);
+      renderWorkspace(state);
+      renderSlotSummary(state);
+      renderSlots(state);
+      renderConfiguration(state);
+      document.getElementById("refresh-usage-button").hidden = !providerSupportsUsage(state);
+      window.requestAnimationFrame(() => {
+        updateStickyLayoutMetrics();
+        updateSectionNavFromViewport();
+      });
+    }
+
     function renderWorkspace(state) {
-      document.getElementById("workspace").innerHTML = [
+      const node = document.getElementById("workspace");
+      if (!node) {
+        return;
+      }
+      node.innerHTML = [
         pathCard("当前活动凭据", state.active_auth_path, "执行切换时真正会被更新的当前 provider 凭据载体"),
         pathCard("Hub 数据目录", state.data_root, "各个已保存账号的凭据快照都存在这里"),
         pathCard("项目目录", state.project_root, "源码模式下当前运行的项目根目录")
@@ -2369,6 +3129,10 @@ INDEX_HTML = """<!doctype html>
         items.push(chip(selectedCount + " 个菜单栏展示账号", selectedCount ? "good" : "muted"));
         items.push(chip(eligibleCount + " 个有效候选账号", eligibleCount ? "accent" : "muted"));
       }
+      if (providerSupportsStatusline(state)) {
+        const statusline = currentStatusline(state);
+        items.push(chip(statusline && statusline.active ? "状态栏已启用" : "状态栏未启用", statusline && statusline.active ? "good" : "muted"));
+      }
       document.getElementById("config-summary").innerHTML = items.join("");
     }
 
@@ -2386,7 +3150,8 @@ INDEX_HTML = """<!doctype html>
             class="selector-pill ${slot.id === activeId ? "active" : ""}"
             type="button"
             data-action="select-config-slot"
-            data-slot-id="${encodeSlotId(slot.id)}">
+            data-slot-id="${encodeSlotId(slot.id)}"
+            title="切换到这条已保存账号记录的配置视图">
             ${text(accountDisplayTitle(slot))}
           </button>
         `)
@@ -2446,14 +3211,14 @@ INDEX_HTML = """<!doctype html>
           <div class="slot-hint">点击卡片查看认证信息、用量状态和菜单栏展示设置。</div>
 
           <div class="slot-actions">
-            <button class="button secondary" type="button" data-action="capture" data-slot-id="${encodedSlotId}">
-              用当前覆盖
+            <button class="button secondary" type="button" data-action="capture" data-slot-id="${encodedSlotId}" title="用当前真实登录状态覆盖这条已保存账号记录">
+              当前覆盖
             </button>
-            <button class="button primary" type="button" data-action="switch" data-slot-id="${encodedSlotId}" ${info.exists ? "" : "disabled"}>
-              切换到这里
+            <button class="button primary" type="button" data-action="switch" data-slot-id="${encodedSlotId}" title="把这条已保存账号记录切换成当前正在使用的账号" ${info.exists ? "" : "disabled"}>
+              切换
             </button>
-            <button class="button ghost" type="button" data-action="clear" data-slot-id="${encodedSlotId}" ${info.exists ? "" : "disabled"}>
-              删除账号
+            <button class="button ghost" type="button" data-action="clear" data-slot-id="${encodedSlotId}" title="删除这条已保存账号记录，不会直接影响当前正在使用的登录" ${info.exists ? "" : "disabled"}>
+              删除
             </button>
           </div>
         </article>
@@ -2510,8 +3275,7 @@ INDEX_HTML = """<!doctype html>
             <section class="module-card">
               <div class="module-head">
                 <div class="module-copy">
-                  <div class="module-title">claude.ai 认证信息</div>
-                  <div class="module-description">这里维护的是查询用量所需的 claude.ai session 和 organization，不是 Claude Code 本体凭据。</div>
+                  ${titledModuleTitle("claude.ai 认证信息", "维护查询用量所需的 claude.ai session 和 organization，不是 Claude Code 本体凭据。")}
                 </div>
                 <div class="chip-row">
                   ${usageAuth.configured ? chip("已配置", "good") : chip("未配置", "muted")}
@@ -2532,14 +3296,16 @@ INDEX_HTML = """<!doctype html>
                   data-slot-label="${encodedDataValue(slot.label || accountDisplayTitle(slot))}"
                   data-usage-org-id="${encodedDataValue(usageAuth.organization_id || "")}"
                   data-usage-org-name="${encodedDataValue(usageAuth.organization_name || "")}"
-                  data-usage-has-session-key="${usageAuth.has_session_key ? "1" : "0"}">
-                  ${usageAuth.configured || usageAuth.organization_id ? "编辑 claude.ai 认证" : "配置 claude.ai 认证"}
+                  data-usage-has-session-key="${usageAuth.has_session_key ? "1" : "0"}"
+                  title="维护这个账号对应的 claude.ai sessionKey 和 organization 配置">
+                  ${usageAuth.configured || usageAuth.organization_id ? "编辑认证" : "配置认证"}
                 </button>
                 <button
                   class="button ghost"
                   type="button"
                   data-action="clear-usage"
                   data-slot-id="${encodedSlotId}"
+                  title="清除这个账号已保存的 claude.ai 用量认证"
                   ${(usageAuth.organization_id || usageAuth.has_session_key) ? "" : "disabled"}>
                   清除认证
                 </button>
@@ -2549,8 +3315,7 @@ INDEX_HTML = """<!doctype html>
             <section class="module-card">
               <div class="module-head">
                 <div class="module-copy">
-                  <div class="module-title">Codex 用量来源</div>
-                  <div class="module-description">这里不需要额外配置网页认证，直接使用这条已保存账号快照里的 access token 查询 Codex 用量。</div>
+                  ${titledModuleTitle("Codex 用量来源", "直接使用这条已保存账号快照里的 access token 查询 Codex 用量，不需要额外配置网页认证。")}
                 </div>
                 <div class="chip-row">
                   ${usageAuth.configured ? chip("可直接查询", "good") : chip("缺少 access token", "warn")}
@@ -2584,8 +3349,7 @@ INDEX_HTML = """<!doctype html>
           <section class="module-card">
             <div class="module-head">
               <div class="module-copy">
-                <div class="module-title">账号名称</div>
-                <div class="module-description">这里统一维护显示名称，不再在卡片上单独放按钮。</div>
+                ${titledModuleTitle("账号名称", "这里只修改 Hub 里的显示名称，不影响真实登录状态。")}
               </div>
             </div>
             <form class="inline-form" data-role="rename-form" data-slot-id="${encodedSlotId}">
@@ -2604,8 +3368,7 @@ INDEX_HTML = """<!doctype html>
           <section class="module-card">
             <div class="module-head">
               <div class="module-copy">
-                <div class="module-title">${text(providerName)} 认证信息</div>
-                <div class="module-description">这里查看当前保存快照里的 ${text(providerName)} 基础认证状态。</div>
+                ${titledModuleTitle(providerName + " 认证信息", "查看当前保存快照里的基础认证状态。")}
               </div>
             </div>
             <div class="detail-grid">
@@ -2625,8 +3388,7 @@ INDEX_HTML = """<!doctype html>
             <section class="module-card">
               <div class="module-head">
                 <div class="module-copy">
-                  <div class="module-title">用量状态</div>
-                  <div class="module-description">这里集中看 5 小时 / 7 天已用百分比、各自重置时间和最近刷新结果。</div>
+                  ${titledModuleTitle("用量状态", "查看 5h / 7d 已用百分比、各自重置时间和最近刷新结果。")}
                 </div>
                 <div class="chip-row">
                   ${usageMetricChip("5h", usage.five_hour_percent)}
@@ -2646,8 +3408,9 @@ INDEX_HTML = """<!doctype html>
                   type="button"
                   data-action="refresh-usage"
                   data-slot-id="${encodedSlotId}"
+                  title="立即刷新这个账号的最新用量状态"
                   ${usageAuth.configured ? "" : "disabled"}>
-                  刷新这个账号的用量
+                  刷新用量
                 </button>
               </div>
             </section>
@@ -2679,8 +3442,9 @@ INDEX_HTML = """<!doctype html>
             data-action="toggle-menu-bar"
             data-slot-id="${encodedSlotId}"
             data-visible="${slot.usage_menu_bar_visible ? "1" : "0"}"
+            title="${slot.usage_menu_bar_visible ? "把这个账号从菜单栏用量展示中移除" : "把这个账号加入菜单栏用量展示"}"
             ${disabled ? "disabled" : ""}>
-            ${slot.usage_menu_bar_visible ? "移出菜单栏" : "加入菜单栏"}
+            ${slot.usage_menu_bar_visible ? "移出" : "加入"}
           </button>
         </div>
       `;
@@ -2740,8 +3504,7 @@ INDEX_HTML = """<!doctype html>
       node.innerHTML = `
         <div class="module-head">
           <div class="module-copy">
-            <div class="module-title">菜单栏展示</div>
-            <div class="module-description">只在这里管理哪些账号进入菜单栏展示。无效账号会保留说明，但不能加入。</div>
+            ${titledModuleTitle("菜单栏展示", "只在这里管理哪些账号进入菜单栏展示。无效账号会保留原因说明，但不能加入。")}
           </div>
           <div class="chip-row">
             ${chip(selectedAccounts.length + " 个展示中", selectedAccounts.length ? "good" : "muted")}
@@ -2763,11 +3526,147 @@ INDEX_HTML = """<!doctype html>
       `;
     }
 
+    function statuslineToggle(name, label, checked, note) {
+      return `
+        <label class="statusline-toggle">
+          <div class="statusline-toggle-head">
+            <input type="checkbox" name="${escapeHtml(name)}" ${checked ? "checked" : ""}>
+            <span>${escapeHtml(label)}</span>
+          </div>
+          <div class="statusline-toggle-note">${escapeHtml(note)}</div>
+        </label>
+      `;
+    }
+
+    function renderStatuslineConfig(state) {
+      const node = document.getElementById("statusline-config");
+      if (!providerSupportsStatusline(state)) {
+        statuslineDrafts[selectedProvider] = null;
+        statuslineDraftDirty[selectedProvider] = false;
+        node.className = "config-card empty";
+        node.innerHTML = "";
+        node.hidden = true;
+        return;
+      }
+      node.hidden = false;
+      const statusline = currentStatusline(state) || {};
+      const preferences = effectiveStatuslinePreferences(state);
+      const currentLabel = statusline.current_account_label || "当前账号";
+      const draftDirty = hasDirtyStatuslineDraft();
+      node.className = "config-card";
+      node.innerHTML = `
+        <div class="module-head">
+          <div class="module-copy">
+            ${titledModuleTitle("Claude Code 状态栏", "把模型、当前账号简称、上下文和用量显示到 Claude Code 底部状态栏。优先读取 Claude Code 官方 stdin，缺失时再回退到 Agent Account Hub 本地缓存。")}
+          </div>
+          <div class="chip-row">
+            ${statusline.active ? chip("已启用", "good") : chip("未启用", "muted")}
+            ${statusline.installed ? chip("脚本已安装", "accent") : chip("脚本未安装", "warn")}
+            ${chip("当前账号: " + currentLabel, "muted")}
+            <span id="statusline-draft-chip" class="chip warn" ${draftDirty ? "" : "hidden"}>${draftDirty ? "有未保存更改" : ""}</span>
+          </div>
+        </div>
+
+        <div class="module-card">
+          <div class="module-head">
+            <div class="module-copy">
+              ${titledModuleTitle("当前预览", statusline.source || "Claude Code stdin + 本地缓存兜底")}
+            </div>
+            <div class="chip-row">
+              ${statusline.settings_error ? chip("settings.json 读取异常", "bad") : chip("settings.json 正常", "muted")}
+              ${statusline.saved_at ? chip("样式已保存", "muted") : chip("尚未保存样式", "warn")}
+            </div>
+          </div>
+          <div id="statusline-preview-text" class="statusline-preview">${escapeHtml(buildStatuslinePreviewText(preferences, state) || "状态栏预览会显示在这里")}</div>
+        </div>
+
+        <form id="statusline-form" class="statusline-form">
+          <section class="module-card">
+            <div class="module-head">
+              <div class="module-copy">
+                ${titledModuleTitle("展示项", "这里维护的是状态栏样式草稿。保存样式不会自动写入 Claude Code；只有点击“应用到 CLI”时，才会更新 ~/.claude/settings.json。")}
+              </div>
+            </div>
+            <div class="statusline-toggle-stack">
+              <section class="statusline-toggle-section">
+                <div class="statusline-toggle-section-head">
+                  ${titledSectionTitle("基础信息", "这些项目决定状态栏里显示哪些基础片段。")}
+                </div>
+                <div class="statusline-toggle-grid">
+                  ${statuslineToggle("show_directory", "目录", Boolean(preferences.show_directory), "显示当前 Claude Code 工作目录的最后一级")}
+                  ${statuslineToggle("show_model", "模型", Boolean(preferences.show_model), "显示当前模型名称，例如 Opus 4.6")}
+                  ${statuslineToggle("show_account", "账号简称", Boolean(preferences.show_account), "显示当前活动账号在 Hub 里的名称")}
+                  ${statuslineToggle("show_context", "上下文", Boolean(preferences.show_context), "显示当前上下文使用比例")}
+                  ${statuslineToggle("show_context_label", "Ctx 标签", Boolean(preferences.show_context_label), "显示或隐藏 Ctx: 前缀")}
+                  ${statuslineToggle("use_24_hour_time", "24 小时制", Boolean(preferences.use_24_hour_time), "把 Reset 时间改成 24 小时格式")}
+                </div>
+              </section>
+
+              <section class="statusline-toggle-section">
+                <div class="statusline-toggle-section-head">
+                  ${titledSectionTitle("用量窗口", "把 5h 和 7d 配置成对放在一起，方便比较和调整。")}
+                </div>
+                <div class="statusline-pair-grid">
+                  <div class="statusline-pair-row">
+                    ${statuslineToggle("show_usage", "5h 用量", Boolean(preferences.show_usage), "显示 5 小时窗口的订阅用量")}
+                    ${statuslineToggle("show_seven_day_usage", "7d 用量", Boolean(preferences.show_seven_day_usage), "显示 7 天窗口的订阅用量")}
+                  </div>
+                  <div class="statusline-pair-row">
+                    ${statuslineToggle("show_progress_bar", "5h 进度条", Boolean(preferences.show_progress_bar), "在 5h 片段后展示条形进度")}
+                    ${statuslineToggle("show_seven_day_progress_bar", "7d 进度条", Boolean(preferences.show_seven_day_progress_bar), "在 7d 片段后展示条形进度")}
+                  </div>
+                  <div class="statusline-pair-row">
+                    ${statuslineToggle("show_pace_marker", "5h 节奏标记", Boolean(preferences.show_pace_marker), "在 5h 进度条里用竖线表示当前窗口所处位置")}
+                    ${statuslineToggle("show_seven_day_pace_marker", "7d 节奏标记", Boolean(preferences.show_seven_day_pace_marker), "在 7d 进度条里用竖线表示当前窗口所处位置")}
+                  </div>
+                  <div class="statusline-pair-row">
+                    ${statuslineToggle("show_reset_time", "5h 重置时间", Boolean(preferences.show_reset_time), "在 5h 片段末尾显示 5 小时窗口何时重置")}
+                    ${statuslineToggle("show_seven_day_reset_time", "7d 重置时间", Boolean(preferences.show_seven_day_reset_time), "在 7d 片段末尾显示 7 天窗口何时重置")}
+                  </div>
+                  <div class="statusline-pair-row">
+                    ${statuslineToggle("show_usage_label", "5h 标签", Boolean(preferences.show_usage_label), "显示或隐藏 Usage: 前缀")}
+                    ${statuslineToggle("show_seven_day_label", "7d 标签", Boolean(preferences.show_seven_day_label), "显示或隐藏 7d: 前缀")}
+                  </div>
+                </div>
+                <div class="statusline-toggle-grid">
+                  ${statuslineToggle("show_reset_label", "Reset 标签", Boolean(preferences.show_reset_label), "显示或隐藏 Reset: 前缀")}
+                </div>
+              </section>
+            </div>
+            <div class="statusline-inline-grid">
+              <label class="field">
+                <span class="field-label">进度条宽度</span>
+                <select class="field-select" name="bar_width">
+                  ${[6, 8, 10, 12, 14, 16].map((value) => `<option value="${value}" ${Number(preferences.bar_width) === value ? "selected" : ""}>${value} 格</option>`).join("")}
+                </select>
+                <span class="field-help">默认 10 格，太窄会看不出节奏标记，太宽会压缩其他内容。</span>
+              </label>
+              <label class="field">
+                <span class="field-label">分隔样式</span>
+                <select class="field-select" name="separator">
+                  <option value=" │ " ${String(preferences.separator || " │ ") === " │ " ? "selected" : ""}>竖线分隔</option>
+                  <option value=" · " ${String(preferences.separator || "") === " · " ? "selected" : ""}>圆点分隔</option>
+                  <option value=" / " ${String(preferences.separator || "") === " / " ? "selected" : ""}>斜杠分隔</option>
+                </select>
+                <span class="field-help">这里只影响状态栏一行里各字段之间的分隔符。</span>
+              </label>
+            </div>
+            <div class="inline-form-row">
+              <button class="button primary" type="submit" title="只保存当前状态栏样式草稿，不会立刻修改 Claude Code">保存样式</button>
+              <button class="button secondary" type="button" data-action="apply-statusline" title="把当前已保存的状态栏样式真正写入 Claude Code 的 settings.json">${statusline.active ? "重新应用" : "应用到 CLI"}</button>
+              <button class="button ghost" type="button" data-action="disable-statusline" title="从 Claude Code 的 settings.json 中移除这条状态栏命令">停用</button>
+            </div>
+          </section>
+        </form>
+      `;
+    }
+
     function renderConfiguration(state) {
       renderConfigSummary(state);
       renderConfigSelector(state);
       renderSelectedSlotConfig(state);
       renderMenuBarConfig(state);
+      renderStatuslineConfig(state);
     }
 
     function renderSlots(state) {
@@ -2781,7 +3680,7 @@ INDEX_HTML = """<!doctype html>
               <div class="slot-id">先把当前登录保存进去，之后就可以在这里直接切换。</div>
             </div>
             <div class="slot-actions">
-              <button class="button primary" type="button" data-action="create-new">保存当前为新账号</button>
+              <button class="button primary" type="button" data-action="create-new" title="把当前登录状态保存成新的本地账号记录">保存当前</button>
             </div>
           </article>
         `;
@@ -2813,42 +3712,58 @@ INDEX_HTML = """<!doctype html>
     }
 
     async function refreshState(options = {}) {
-      if (refreshPromise) {
-        return refreshPromise;
+      const provider = normalizeProvider(options.provider || selectedProvider);
+      if (refreshPromises[provider]) {
+        return refreshPromises[provider];
       }
       const quiet = Boolean(options.quiet);
-      setProviderTabs();
-      setSyncPill("正在同步 " + providerMeta().label + " 状态", "syncing");
+      const isActiveProvider = provider === selectedProvider;
+      if (isActiveProvider) {
+        setProviderTabs();
+        if (options.showLoading !== false) {
+          const cached = providerStateCache[provider];
+          if (cached) {
+            renderOverviewState(cached, provider);
+          } else {
+            renderLoadingProviderState(provider);
+          }
+        }
+        setSyncPill(providerSyncLabel(provider) + " 同步中", "syncing");
+      }
 
-      refreshPromise = (async () => {
+      refreshPromises[provider] = (async () => {
         try {
-          const state = await request(providerStatePath());
-          latestState = state;
-          renderCurrent(state.current);
-          renderWorkspace(state);
-          renderSlotSummary(state);
-          renderSlots(state);
-          renderConfiguration(state);
-          document.getElementById("refresh-usage-button").hidden = !providerSupportsUsage(state);
-          setSyncPill(providerMeta().label + " 状态已同步", "idle");
-          if (!options.skipUsageAutoRefresh && shouldAutoRefreshUsage(state)) {
+          const state = await request("/api/providers/" + encodeURIComponent(provider) + "/state");
+          const nextSignature = stateSignature(state);
+          const previousRenderedSignature = providerRenderedSignatures[provider];
+          providerStateCache[provider] = state;
+          if (provider === selectedProvider) {
+            latestState = state;
+            if (previousRenderedSignature !== nextSignature) {
+              renderOverviewState(state, provider);
+            }
+            setSyncPill(providerSyncLabel(provider) + " 已同步", "idle");
+          }
+          if (!options.skipUsageAutoRefresh && shouldAutoRefreshUsage(state, provider)) {
             window.setTimeout(() => {
-              refreshAllUsage({ quiet: true, auto: true }).catch(() => {});
+              refreshAllUsage({ quiet: true, auto: true, provider }).catch(() => {});
             }, 0);
           }
           return state;
         } catch (error) {
-          setSyncPill(providerMeta().label + " 读取失败", "error");
-          if (!quiet) {
+          if (provider === selectedProvider) {
+            setSyncPill(providerSyncLabel(provider) + " 失败", "error");
+          }
+          if (!quiet && provider === selectedProvider) {
             flash(error.message, true);
           }
           throw error;
         } finally {
-          refreshPromise = null;
+          refreshPromises[provider] = null;
         }
       })();
 
-      return refreshPromise;
+      return refreshPromises[provider];
     }
 
     async function createNewAccountFromCurrent() {
@@ -2977,37 +3892,73 @@ INDEX_HTML = """<!doctype html>
       await refreshState({ quiet: true, skipUsageAutoRefresh: true });
     }
 
-    function shouldAutoRefreshUsage(state = latestState) {
+    async function saveStatuslinePreferences(form, options = {}) {
+      const payload = statuslineDraftFromForm(form);
+      await request(providerActionPath("/statusline"), {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      statuslineDrafts[selectedProvider] = { ...payload };
+      statuslineDraftDirty[selectedProvider] = false;
+      if (!options.quiet) {
+        flash("状态栏样式已保存");
+      }
+      await refreshState({ quiet: true, skipUsageAutoRefresh: true });
+    }
+
+    async function applyStatusline(form = null) {
+      if (form && hasDirtyStatuslineDraft()) {
+        await saveStatuslinePreferences(form, { quiet: true });
+      }
+      await request(providerActionPath("/statusline/apply"), {
+        method: "POST",
+        body: "{}"
+      });
+      flash("Claude Code 状态栏已应用");
+      await refreshState({ quiet: true, skipUsageAutoRefresh: true });
+    }
+
+    async function disableStatusline() {
+      await request(providerActionPath("/statusline/disable"), {
+        method: "POST",
+        body: "{}"
+      });
+      flash("Claude Code 状态栏已停用");
+      await refreshState({ quiet: true, skipUsageAutoRefresh: true });
+    }
+
+    function shouldAutoRefreshUsage(state = latestState, provider = selectedProvider) {
       if (!hasConfiguredUsageAccounts(state)) {
         return false;
       }
-      if (usageRefreshPromise) {
+      if (usageRefreshPromises[provider]) {
         return false;
       }
-      return Date.now() - lastUsageAutoRefreshAt >= providerUsageAutoRefreshMs(state);
+      return Date.now() - lastUsageAutoRefreshAt[provider] >= providerUsageAutoRefreshMs(state);
     }
 
     async function refreshAllUsage(options = {}) {
-      if (usageRefreshPromise) {
-        return usageRefreshPromise;
+      const provider = normalizeProvider(options.provider || selectedProvider);
+      if (usageRefreshPromises[provider]) {
+        return usageRefreshPromises[provider];
       }
       const quiet = Boolean(options.quiet);
       const auto = Boolean(options.auto);
-      lastUsageAutoRefreshAt = Date.now();
-      usageRefreshPromise = (async () => {
-        await request(providerActionPath("/usage/refresh-all"), {
+      lastUsageAutoRefreshAt[provider] = Date.now();
+      usageRefreshPromises[provider] = (async () => {
+        await request("/api/providers/" + encodeURIComponent(provider) + "/usage/refresh-all", {
           method: "POST",
           body: "{}"
         });
-        if (!quiet && !auto) {
-          flash("已刷新当前 provider 下已配置账号的用量");
+        if (!quiet && !auto && provider === selectedProvider) {
+          flash("已刷新当前平台下已配置账号的用量");
         }
-        await refreshState({ quiet: true, skipUsageAutoRefresh: true });
+        await refreshState({ quiet: true, skipUsageAutoRefresh: true, provider });
       })();
       try {
-        return await usageRefreshPromise;
+        return await usageRefreshPromises[provider];
       } finally {
-        usageRefreshPromise = null;
+        usageRefreshPromises[provider] = null;
       }
     }
 
@@ -3073,7 +4024,23 @@ INDEX_HTML = """<!doctype html>
       }
       selectedProvider = nextProvider;
       window.localStorage.setItem(PROVIDER_STORAGE_KEY, selectedProvider);
-      refreshState().catch(() => {});
+      setProviderTabs();
+      const cached = providerStateCache[nextProvider];
+      if (cached) {
+        renderOverviewState(cached, nextProvider);
+      } else {
+        renderLoadingProviderState(nextProvider);
+      }
+      setSyncPill(providerSyncLabel(nextProvider) + " 同步中", "syncing");
+      refreshState({ quiet: true, provider: nextProvider, showLoading: false }).catch(() => {});
+    });
+
+    document.getElementById("section-nav").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-target]");
+      if (!button) {
+        return;
+      }
+      scrollToSection(button.dataset.target || "");
     });
 
     document.getElementById("config-selector").addEventListener("click", (event) => {
@@ -3236,18 +4203,97 @@ INDEX_HTML = """<!doctype html>
         });
     });
 
+    document.getElementById("statusline-config").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button || button.disabled) {
+        return;
+      }
+      const action = button.dataset.action;
+      const runner =
+        action === "disable-statusline"
+          ? disableStatusline
+          : action === "apply-statusline"
+            ? () => applyStatusline(document.querySelector("#statusline-form"))
+            : null;
+      if (!runner) {
+        return;
+      }
+      button.disabled = true;
+      runner()
+        .catch((error) => flash(error.message, true))
+        .finally(() => {
+          button.disabled = false;
+        });
+    });
+
+    function handleStatuslineDraftInput(form) {
+      if (!form) {
+        return;
+      }
+      statuslineDrafts[selectedProvider] = statuslineDraftFromForm(form);
+      statuslineDraftDirty[selectedProvider] = true;
+      updateStatuslinePreviewFromDraft(latestState);
+    }
+
+    document.getElementById("statusline-config").addEventListener("submit", (event) => {
+      const form = event.target.closest("form#statusline-form");
+      if (!form) {
+        return;
+      }
+      event.preventDefault();
+      const submitButton = form.querySelector("button[type='submit']");
+      if (!submitButton) {
+        return;
+      }
+      submitButton.disabled = true;
+      saveStatuslinePreferences(form)
+        .catch((error) => flash(error.message, true))
+        .finally(() => {
+          submitButton.disabled = false;
+        });
+    });
+
+    document.getElementById("statusline-config").addEventListener("input", (event) => {
+      const form = event.target.closest("form#statusline-form");
+      if (!form) {
+        return;
+      }
+      handleStatuslineDraftInput(form);
+    });
+
+    document.getElementById("statusline-config").addEventListener("change", (event) => {
+      const form = event.target.closest("form#statusline-form");
+      if (!form) {
+        return;
+      }
+      handleStatuslineDraftInput(form);
+    });
+
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && !isEditingForm()) {
+      if (!document.hidden && !isEditingForm() && !hasDirtyStatuslineDraft()) {
         refreshState({ quiet: true }).catch(() => {});
       }
     });
 
+    window.addEventListener("scroll", () => {
+      window.requestAnimationFrame(updateSectionNavFromViewport);
+    }, { passive: true });
+
+    window.addEventListener("resize", () => {
+      window.requestAnimationFrame(() => {
+        updateStickyLayoutMetrics();
+        updateSectionNavFromViewport();
+      });
+    });
+
     window.setInterval(() => {
-      if (!document.hidden && !isEditingForm()) {
+      if (!document.hidden && !isEditingForm() && !hasDirtyStatuslineDraft()) {
         refreshState({ quiet: true }).catch(() => {});
       }
     }, REFRESH_INTERVAL_MS);
 
+    updateStickyLayoutMetrics();
+    updateSectionNavFromViewport();
     refreshState().catch(() => {});
   </script>
 </body>
@@ -3298,6 +4344,51 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             self._send_json(payload)
+            return
+
+        provider_statusline_match = re.fullmatch(
+            r"/api/providers/([^/]+)/statusline",
+            self.path,
+        )
+        if provider_statusline_match:
+            payload = self._read_json_body()
+            try:
+                provider = normalize_provider_name(provider_statusline_match.group(1))
+                result = self.hub.set_statusline_preferences(provider, payload)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(result)
+            return
+
+        provider_statusline_apply_match = re.fullmatch(
+            r"/api/providers/([^/]+)/statusline/apply",
+            self.path,
+        )
+        if provider_statusline_apply_match:
+            self._read_json_body()
+            try:
+                provider = normalize_provider_name(provider_statusline_apply_match.group(1))
+                result = self.hub.apply_statusline(provider)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(result)
+            return
+
+        provider_statusline_disable_match = re.fullmatch(
+            r"/api/providers/([^/]+)/statusline/disable",
+            self.path,
+        )
+        if provider_statusline_disable_match:
+            self._read_json_body()
+            try:
+                provider = normalize_provider_name(provider_statusline_disable_match.group(1))
+                result = self.hub.disable_statusline(provider)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(result)
             return
 
         provider_usage_auth_match = re.fullmatch(
