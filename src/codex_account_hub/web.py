@@ -83,7 +83,7 @@ INDEX_HTML = """<!doctype html>
     }
 
     main {
-      width: min(1240px, calc(100vw - 32px));
+      width: min(1480px, calc(100vw - 32px));
       margin: 0 auto;
       padding: 24px 0 48px;
       position: relative;
@@ -202,6 +202,19 @@ INDEX_HTML = """<!doctype html>
       gap: 10px;
       justify-items: end;
       align-content: start;
+    }
+
+    .section-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .section-toolbar .summary-row {
+      flex: 1 1 360px;
+      min-width: 0;
     }
 
     .topbar {
@@ -1023,6 +1036,41 @@ INDEX_HTML = """<!doctype html>
       white-space: nowrap;
     }
 
+    .statusline-preview-line {
+      display: inline-flex;
+      align-items: center;
+      min-width: max-content;
+      gap: 0;
+    }
+
+    .statusline-preview-token {
+      color: #eef7f2;
+    }
+
+    .statusline-preview-token.muted {
+      color: #8b949e;
+    }
+
+    .statusline-preview-token.model {
+      color: #27c8ff;
+    }
+
+    .statusline-preview-token.account {
+      color: #ffb15e;
+    }
+
+    .statusline-preview-token.good {
+      color: #3ed466;
+    }
+
+    .statusline-preview-token.warn {
+      color: #ffb347;
+    }
+
+    .statusline-preview-token.bad {
+      color: #ff6b6b;
+    }
+
     .statusline-form {
       display: grid;
       gap: 14px;
@@ -1098,11 +1146,6 @@ INDEX_HTML = """<!doctype html>
       align-items: center;
       gap: 10px;
       font-weight: 650;
-    }
-
-    .statusline-toggle-note {
-      color: var(--muted);
-      font-size: 0.9rem;
     }
 
     .statusline-inline-grid {
@@ -1271,13 +1314,6 @@ INDEX_HTML = """<!doctype html>
     .slot-id {
       color: var(--muted);
       font-size: 0.9rem;
-    }
-
-    .slot-identity {
-      font-family: "Baskerville", "Iowan Old Style", serif;
-      font-size: 1.45rem;
-      line-height: 1.08;
-      word-break: break-word;
     }
 
     .slot-caption {
@@ -1643,7 +1679,7 @@ INDEX_HTML = """<!doctype html>
 
     @media (max-width: 720px) {
       main {
-        width: min(100vw - 18px, 1240px);
+        width: min(100vw - 18px, 1480px);
         padding-top: 18px;
       }
 
@@ -1733,11 +1769,17 @@ INDEX_HTML = """<!doctype html>
             </span>
             <span class="side-nav-index">02</span>
           </button>
-          <button class="side-nav-button" type="button" data-target="section-config" title="统一维护认证、用量、菜单栏展示和 Claude Code 状态栏">
+          <button class="side-nav-button" type="button" data-target="section-account-config" title="维护已保存账号的认证、用量和菜单栏展示配置">
             <span class="side-nav-label">
-              <span class="side-nav-title">配置中心</span>
+              <span class="side-nav-title">账号配置</span>
             </span>
             <span class="side-nav-index">03</span>
+          </button>
+          <button class="side-nav-button" type="button" data-target="section-statusline" title="维护 CLI 状态栏配置">
+            <span class="side-nav-label">
+              <span class="side-nav-title">状态栏</span>
+            </span>
+            <span class="side-nav-index">04</span>
           </button>
         </div>
       </aside>
@@ -1747,8 +1789,10 @@ INDEX_HTML = """<!doctype html>
           <div class="section-head">
             <div class="section-copy">
               <div class="eyebrow">Active Identity</div>
-              <h2>当前活动认证</h2>
-              <p>主状态按当前 provider 的 access token 判断；展开详情时再看更细的 token 与同步状态。</p>
+              <div class="module-title-row">
+                <h2>当前活动认证</h2>
+                <span class="title-hint" title="主状态按当前 provider 的 access token 判断；展开详情时再看更细的 token 与同步状态。" aria-label="主状态按当前 provider 的 access token 判断；展开详情时再看更细的 token 与同步状态。">?</span>
+              </div>
             </div>
             <div class="section-side">
               <button id="save-new-button" class="button primary" type="button" title="把当前登录保存成一条新的本地账号记录">保存当前</button>
@@ -1775,8 +1819,10 @@ INDEX_HTML = """<!doctype html>
           <div class="section-head">
             <div class="section-copy">
               <div class="eyebrow">Accounts</div>
-              <h2>已保存账号</h2>
-              <p>卡片只负责切换和快速操作；认证、用量和菜单栏展示配置统一放到下面的配置中心里维护。</p>
+              <div class="module-title-row">
+                <h2>已保存账号</h2>
+                <span class="title-hint" title="卡片只负责切换和快速操作；认证、用量和菜单栏展示配置统一放到下面的配置中心里维护。" aria-label="卡片只负责切换和快速操作；认证、用量和菜单栏展示配置统一放到下面的配置中心里维护。">?</span>
+              </div>
             </div>
             <div id="slot-summary" class="summary-row"></div>
           </div>
@@ -1784,17 +1830,20 @@ INDEX_HTML = """<!doctype html>
           <div id="slots" class="slots"></div>
         </section>
 
-        <section id="section-config" class="panel config-panel">
+        <section id="section-account-config" class="panel config-panel">
           <div class="section-head">
             <div class="section-copy">
               <div class="eyebrow">Configuration Center</div>
-              <h2>账号配置与菜单栏展示</h2>
-              <p>这里配置的是“已保存账号记录”，不会切换当前登录。你可以直接指定想编辑的账号，再分别查看 Claude Code、claude.ai 与用量状态。</p>
+              <div class="module-title-row">
+                <h2>账号配置与菜单栏展示</h2>
+                <span class="title-hint" title="这里配置的是已保存账号记录，不会切换当前登录。你可以直接指定想编辑的账号，再分别查看 Claude Code、claude.ai 与用量状态。" aria-label="这里配置的是已保存账号记录，不会切换当前登录。你可以直接指定想编辑的账号，再分别查看 Claude Code、claude.ai 与用量状态。">?</span>
+              </div>
             </div>
-            <div class="section-side">
-              <button id="refresh-usage-button" class="button secondary" type="button" title="刷新当前平台下所有已配置账号的用量缓存" hidden>刷新用量</button>
-              <div id="config-summary" class="summary-row"></div>
-            </div>
+          </div>
+
+          <div class="section-toolbar">
+            <div id="config-summary" class="summary-row"></div>
+            <button id="refresh-usage-button" class="button secondary" type="button" title="刷新当前平台下所有已配置账号的用量缓存" hidden>刷新用量</button>
           </div>
 
           <div id="config-selector" class="config-selector"></div>
@@ -1803,6 +1852,17 @@ INDEX_HTML = """<!doctype html>
             <section id="selected-slot-config" class="config-card empty"></section>
             <section id="menu-bar-config" class="config-card empty"></section>
           </div>
+        </section>
+
+        <section id="section-statusline" class="panel config-panel">
+          <div class="section-head">
+            <div class="section-copy">
+              <div class="eyebrow">CLI Statusline</div>
+              <h2>CLI 状态栏</h2>
+            </div>
+            <div id="statusline-summary" class="summary-row"></div>
+          </div>
+
           <section id="statusline-config" class="config-card empty"></section>
         </section>
 
@@ -1917,19 +1977,23 @@ INDEX_HTML = """<!doctype html>
       "claude-code": null
     };
 
-    function sectionNavButtons() {
+    function allSectionNavButtons() {
       return Array.from(document.querySelectorAll("#section-nav [data-target]"));
     }
 
+    function sectionNavButtons() {
+      return allSectionNavButtons().filter((button) => !button.hidden);
+    }
+
     function setActiveSectionNav(targetId) {
-      sectionNavButtons().forEach((button) => {
-        button.classList.toggle("active", button.dataset.target === targetId);
+      allSectionNavButtons().forEach((button) => {
+        button.classList.toggle("active", !button.hidden && button.dataset.target === targetId);
       });
     }
 
     function scrollToSection(targetId) {
       const node = document.getElementById(targetId);
-      if (!node) {
+      if (!node || node.hidden) {
         return;
       }
       node.scrollIntoView({
@@ -1946,7 +2010,7 @@ INDEX_HTML = """<!doctype html>
       }
       const sections = buttons
         .map((button) => document.getElementById(button.dataset.target || ""))
-        .filter(Boolean);
+        .filter((section) => section && !section.hidden);
       if (!sections.length) {
         return;
       }
@@ -1970,6 +2034,17 @@ INDEX_HTML = """<!doctype html>
       });
 
       setActiveSectionNav(activeSection.id);
+    }
+
+    function setStatuslineSectionVisible(visible) {
+      const section = document.getElementById("section-statusline");
+      const button = document.querySelector("#section-nav [data-target='section-statusline']");
+      if (section) {
+        section.hidden = false;
+      }
+      if (button) {
+        button.hidden = false;
+      }
     }
 
     function updateStickyLayoutMetrics() {
@@ -2136,7 +2211,21 @@ INDEX_HTML = """<!doctype html>
       return chars.join("");
     }
 
-    function buildStatuslinePreviewText(preferences, state = latestState) {
+    function previewToneForPercent(percent) {
+      const numeric = Number(percent);
+      if (!Number.isFinite(numeric)) {
+        return "muted";
+      }
+      if (numeric >= 80) {
+        return "bad";
+      }
+      if (numeric >= 60) {
+        return "warn";
+      }
+      return "good";
+    }
+
+    function buildStatuslinePreviewSegments(preferences, state = latestState) {
       const statusline = currentStatusline(state) || {};
       const usage = (state && state.current && state.current.usage) || {};
       const parts = [];
@@ -2184,24 +2273,32 @@ INDEX_HTML = """<!doctype html>
             includeDateInReset
           );
         }
-        return segment;
+        return {
+          text: segment,
+          tone: previewToneForPercent(usagePercent)
+        };
       };
 
       if (preferences.show_directory) {
-        parts.push("agent-account-hub");
+        parts.push({ text: "agent-account-hub", tone: "muted" });
       }
       if (preferences.show_model) {
-        parts.push("Opus 4.6");
+        parts.push({ text: "Opus 4.6", tone: "model" });
       }
       if (preferences.show_account) {
-        parts.push(statusline.current_account_label || "当前账号");
+        parts.push({ text: statusline.current_account_label || "当前账号", tone: "account" });
       }
       if (preferences.show_context) {
+        const contextPercent = Number((state && state.current && state.current.context_window_percent) || 0);
         let contextText = "0%";
+        if (Number.isFinite(contextPercent)) {
+          const rounded = Math.round(contextPercent * 10) / 10;
+          contextText = (Math.abs(rounded % 1) < 0.001 ? rounded.toFixed(0) : rounded.toFixed(1)) + "%";
+        }
         if (preferences.show_context_label) {
           contextText = "Ctx: " + contextText;
         }
-        parts.push(contextText);
+        parts.push({ text: contextText, tone: previewToneForPercent(contextPercent) });
       }
       if (preferences.show_usage) {
         parts.push(
@@ -2233,7 +2330,32 @@ INDEX_HTML = """<!doctype html>
           })
         );
       }
-      return parts.filter(Boolean).join(separator);
+      return {
+        separator,
+        parts: parts.filter(Boolean)
+      };
+    }
+
+    function buildStatuslinePreviewText(preferences, state = latestState) {
+      const model = buildStatuslinePreviewSegments(preferences, state);
+      return model.parts.map((part) => part.text).join(model.separator);
+    }
+
+    function buildStatuslinePreviewMarkup(preferences, state = latestState) {
+      const model = buildStatuslinePreviewSegments(preferences, state);
+      if (!model.parts.length) {
+        return '<span class="statusline-preview-token muted">状态栏预览会显示在这里</span>';
+      }
+      return '<span class="statusline-preview-line">' + model.parts.map((part, index) => {
+        const chunks = [];
+        if (index > 0) {
+          chunks.push('<span class="statusline-preview-token">' + escapeHtml(model.separator) + '</span>');
+        }
+        chunks.push(
+          '<span class="statusline-preview-token ' + escapeHtml(part.tone || "") + '">' + escapeHtml(part.text) + '</span>'
+        );
+        return chunks.join("");
+      }).join("") + "</span>";
     }
 
     function updateStatuslinePreviewFromDraft(state = latestState) {
@@ -2241,17 +2363,8 @@ INDEX_HTML = """<!doctype html>
       if (!previewNode) {
         return;
       }
-      previewNode.textContent = buildStatuslinePreviewText(effectiveStatuslinePreferences(state), state);
-      const draftChip = document.getElementById("statusline-draft-chip");
-      if (draftChip) {
-        if (hasDirtyStatuslineDraft()) {
-          draftChip.hidden = false;
-          draftChip.textContent = "有未保存更改";
-        } else {
-          draftChip.hidden = true;
-          draftChip.textContent = "";
-        }
-      }
+      previewNode.innerHTML = buildStatuslinePreviewMarkup(effectiveStatuslinePreferences(state), state);
+      renderStatuslineSummary(state);
     }
 
     function selectedSlotId() {
@@ -3051,20 +3164,28 @@ INDEX_HTML = """<!doctype html>
         <div class="empty-state">正在准备 ${escapeHtml(label)} 的菜单栏与用量配置…</div>
       `;
 
+      setStatuslineSectionVisible(true);
+      document.getElementById("statusline-summary").innerHTML = supportsStatusline
+        ? chip("正在读取 Claude Code 状态栏", "accent")
+        : [chip(label + " 状态栏待实现", "muted")].join("");
       const statuslineNode = document.getElementById("statusline-config");
       if (supportsStatusline) {
-        statuslineNode.hidden = false;
         statuslineNode.className = "config-card empty";
         statuslineNode.innerHTML = `
           <div class="empty-state">正在读取 Claude Code 状态栏配置…</div>
         `;
       } else {
-        statuslineNode.hidden = true;
         statuslineNode.className = "config-card empty";
-        statuslineNode.innerHTML = "";
+        statuslineNode.innerHTML = `
+          <div class="empty-state">${escapeHtml(label)} 状态栏还在规划中。这里先保留和 Claude Code 一致的导航位置，后续会在这个区域接入预览和配置。</div>
+        `;
       }
 
       document.getElementById("refresh-usage-button").hidden = false;
+      window.requestAnimationFrame(() => {
+        updateStickyLayoutMetrics();
+        updateSectionNavFromViewport();
+      });
     }
 
     function renderOverviewState(state, provider = selectedProvider) {
@@ -3077,6 +3198,7 @@ INDEX_HTML = """<!doctype html>
       renderSlotSummary(state);
       renderSlots(state);
       renderConfiguration(state);
+      setStatuslineSectionVisible(true);
       document.getElementById("refresh-usage-button").hidden = !providerSupportsUsage(state);
       window.requestAnimationFrame(() => {
         updateStickyLayoutMetrics();
@@ -3130,10 +3252,32 @@ INDEX_HTML = """<!doctype html>
         items.push(chip(eligibleCount + " 个有效候选账号", eligibleCount ? "accent" : "muted"));
       }
       if (providerSupportsStatusline(state)) {
-        const statusline = currentStatusline(state);
-        items.push(chip(statusline && statusline.active ? "状态栏已启用" : "状态栏未启用", statusline && statusline.active ? "good" : "muted"));
       }
       document.getElementById("config-summary").innerHTML = items.join("");
+    }
+
+    function renderStatuslineSummary(state) {
+      const node = document.getElementById("statusline-summary");
+      if (!node) {
+        return;
+      }
+      if (!providerSupportsStatusline(state)) {
+        node.innerHTML = [
+          chip(providerMeta().label + " 状态栏待实现", "muted")
+        ].join("");
+        return;
+      }
+      const statusline = currentStatusline(state) || {};
+      const currentLabel = statusline.current_account_label || "当前账号";
+      const items = [
+        chip(statusline.active ? "已启用" : "未启用", statusline.active ? "good" : "muted"),
+        chip(statusline.installed ? "脚本已安装" : "脚本未安装", statusline.installed ? "accent" : "warn"),
+        chip("当前账号: " + currentLabel, "muted")
+      ];
+      if (hasDirtyStatuslineDraft()) {
+        items.push(chip("有未保存更改", "warn"));
+      }
+      node.innerHTML = items.join("");
     }
 
     function renderConfigSelector(state) {
@@ -3197,7 +3341,6 @@ INDEX_HTML = """<!doctype html>
             <div class="slot-id">${text(accountDisplayMeta(slot))}</div>
           </div>
 
-          <div class="slot-identity">${text(accountIdentityLine(slot))}</div>
           <div class="slot-caption">${text(slotCaption(slot))}</div>
 
           <div class="slot-kpis">
@@ -3528,12 +3671,12 @@ INDEX_HTML = """<!doctype html>
 
     function statuslineToggle(name, label, checked, note) {
       return `
-        <label class="statusline-toggle">
+        <label class="statusline-toggle" title="${escapeHtml(note)}">
           <div class="statusline-toggle-head">
             <input type="checkbox" name="${escapeHtml(name)}" ${checked ? "checked" : ""}>
             <span>${escapeHtml(label)}</span>
+            ${titleHint(note)}
           </div>
-          <div class="statusline-toggle-note">${escapeHtml(note)}</div>
         </label>
       `;
     }
@@ -3543,30 +3686,18 @@ INDEX_HTML = """<!doctype html>
       if (!providerSupportsStatusline(state)) {
         statuslineDrafts[selectedProvider] = null;
         statuslineDraftDirty[selectedProvider] = false;
+        setStatuslineSectionVisible(true);
         node.className = "config-card empty";
-        node.innerHTML = "";
-        node.hidden = true;
+        node.innerHTML = `
+          <div class="empty-state">${escapeHtml(providerMeta().label)} 状态栏功能还没接进来。这里先沿用和 Claude Code 一样的导航位置，后续会在这个区域补上预览、展示项和应用入口。</div>
+        `;
         return;
       }
-      node.hidden = false;
+      setStatuslineSectionVisible(true);
       const statusline = currentStatusline(state) || {};
       const preferences = effectiveStatuslinePreferences(state);
-      const currentLabel = statusline.current_account_label || "当前账号";
-      const draftDirty = hasDirtyStatuslineDraft();
-      node.className = "config-card";
+      node.className = "config-stack";
       node.innerHTML = `
-        <div class="module-head">
-          <div class="module-copy">
-            ${titledModuleTitle("Claude Code 状态栏", "把模型、当前账号简称、上下文和用量显示到 Claude Code 底部状态栏。优先读取 Claude Code 官方 stdin，缺失时再回退到 Agent Account Hub 本地缓存。")}
-          </div>
-          <div class="chip-row">
-            ${statusline.active ? chip("已启用", "good") : chip("未启用", "muted")}
-            ${statusline.installed ? chip("脚本已安装", "accent") : chip("脚本未安装", "warn")}
-            ${chip("当前账号: " + currentLabel, "muted")}
-            <span id="statusline-draft-chip" class="chip warn" ${draftDirty ? "" : "hidden"}>${draftDirty ? "有未保存更改" : ""}</span>
-          </div>
-        </div>
-
         <div class="module-card">
           <div class="module-head">
             <div class="module-copy">
@@ -3577,7 +3708,7 @@ INDEX_HTML = """<!doctype html>
               ${statusline.saved_at ? chip("样式已保存", "muted") : chip("尚未保存样式", "warn")}
             </div>
           </div>
-          <div id="statusline-preview-text" class="statusline-preview">${escapeHtml(buildStatuslinePreviewText(preferences, state) || "状态栏预览会显示在这里")}</div>
+          <div id="statusline-preview-text" class="statusline-preview">${buildStatuslinePreviewMarkup(preferences, state)}</div>
         </div>
 
         <form id="statusline-form" class="statusline-form">
@@ -3634,21 +3765,25 @@ INDEX_HTML = """<!doctype html>
               </section>
             </div>
             <div class="statusline-inline-grid">
-              <label class="field">
-                <span class="field-label">进度条宽度</span>
+              <label class="field" title="默认 10 格，太窄会看不出节奏标记，太宽会压缩其他内容。">
+                <div class="module-title-row">
+                  <span class="field-label">进度条宽度</span>
+                  ${titleHint("默认 10 格，太窄会看不出节奏标记，太宽会压缩其他内容。")}
+                </div>
                 <select class="field-select" name="bar_width">
                   ${[6, 8, 10, 12, 14, 16].map((value) => `<option value="${value}" ${Number(preferences.bar_width) === value ? "selected" : ""}>${value} 格</option>`).join("")}
                 </select>
-                <span class="field-help">默认 10 格，太窄会看不出节奏标记，太宽会压缩其他内容。</span>
               </label>
-              <label class="field">
-                <span class="field-label">分隔样式</span>
+              <label class="field" title="这里只影响状态栏一行里各字段之间的分隔符。">
+                <div class="module-title-row">
+                  <span class="field-label">分隔样式</span>
+                  ${titleHint("这里只影响状态栏一行里各字段之间的分隔符。")}
+                </div>
                 <select class="field-select" name="separator">
                   <option value=" │ " ${String(preferences.separator || " │ ") === " │ " ? "selected" : ""}>竖线分隔</option>
                   <option value=" · " ${String(preferences.separator || "") === " · " ? "selected" : ""}>圆点分隔</option>
                   <option value=" / " ${String(preferences.separator || "") === " / " ? "selected" : ""}>斜杠分隔</option>
                 </select>
-                <span class="field-help">这里只影响状态栏一行里各字段之间的分隔符。</span>
               </label>
             </div>
             <div class="inline-form-row">
@@ -3666,6 +3801,7 @@ INDEX_HTML = """<!doctype html>
       renderConfigSelector(state);
       renderSelectedSlotConfig(state);
       renderMenuBarConfig(state);
+      renderStatuslineSummary(state);
       renderStatuslineConfig(state);
     }
 
