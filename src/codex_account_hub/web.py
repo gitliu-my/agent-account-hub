@@ -4437,6 +4437,23 @@ INDEX_HTML = """<!doctype html>
 """
 
 
+_ALLOWED_ORIGINS = frozenset({
+    "http://127.0.0.1",
+    "http://localhost",
+    "http://[::1]",
+})
+
+
+def _is_local_origin(origin: str | None) -> bool:
+    if not origin:
+        return True
+    normalized = origin.strip().rstrip("/").lower()
+    for allowed in _ALLOWED_ORIGINS:
+        if normalized == allowed or normalized.startswith(f"{allowed}:"):
+            return True
+    return False
+
+
 class AuthHubRequestHandler(BaseHTTPRequestHandler):
     hub: UnifiedAuthHub
 
@@ -4460,6 +4477,11 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
         self._send_error_json(HTTPStatus.NOT_FOUND, "not found")
 
     def do_POST(self) -> None:
+        origin = self.headers.get("Origin")
+        if not _is_local_origin(origin):
+            self._send_error_json(HTTPStatus.FORBIDDEN, "forbidden: non-local origin")
+            return
+
         if self.path == "/api/accounts/create-from-current":
             self._read_json_body()
             try:

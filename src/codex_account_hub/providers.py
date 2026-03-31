@@ -114,14 +114,17 @@ def sha256_json_payload(payload: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def run_subprocess(args: list[str]) -> subprocess.CompletedProcess[str]:
+def run_subprocess(args: list[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
             args,
             capture_output=True,
             text=True,
             check=False,
+            timeout=timeout,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise AuthHubError(f"command timed out after {timeout}s: {' '.join(args)}") from exc
     except OSError as exc:
         raise AuthHubError(f"failed to run {' '.join(args)}: {exc}") from exc
 
@@ -1483,7 +1486,7 @@ class SubprocessClaudeCodeBackend(ClaudeCodeBackend):
     def active_auth_path(self) -> str:
         return f"keychain://generic-password/{self.service_name}"
 
-    def _run(self, args: list[str]) -> subprocess.CompletedProcess[str]:
+    def _run(self, args: list[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
         try:
             return subprocess.run(
                 args,
@@ -1491,7 +1494,10 @@ class SubprocessClaudeCodeBackend(ClaudeCodeBackend):
                 text=True,
                 check=False,
                 env=self._command_env(),
+                timeout=timeout,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise AuthHubError(f"command timed out after {timeout}s: {' '.join(args)}") from exc
         except OSError as exc:
             raise AuthHubError(f"failed to run {' '.join(args)}: {exc}") from exc
 

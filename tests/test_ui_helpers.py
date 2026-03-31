@@ -38,7 +38,7 @@ class UiHelpersTests(unittest.TestCase):
                 "active": True,
                 "snapshot": {
                     "exists": True,
-                    "email": "sixmingyue@gmail.com",
+                    "email": "test@example.com",
                     "name": "Six",
                     "plan_type": "pro",
                 },
@@ -46,7 +46,7 @@ class UiHelpersTests(unittest.TestCase):
         )
         self.assertEqual(row["status"], "当前认证")
         self.assertEqual(row["label"], "Claude 主号")
-        self.assertEqual(row["email"], "sixmingyue@gmail.com")
+        self.assertEqual(row["email"], "test@example.com")
         self.assertEqual(row["plan"], "pro")
 
     def test_usage_summary_label_prefers_percentages(self) -> None:
@@ -74,7 +74,7 @@ class UiHelpersTests(unittest.TestCase):
                 "active": False,
                 "snapshot": {
                     "exists": True,
-                    "email": "sixmingyue@gmail.com",
+                    "email": "test@example.com",
                     "name": "Six",
                     "plan_type": "max",
                 },
