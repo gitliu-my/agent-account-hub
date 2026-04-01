@@ -17,6 +17,7 @@ from .core import (
     APP_DISPLAY_NAME,
     AuthHub,
     AuthHubError,
+    BaseAccountHub,
     PROJECT_ROOT,
     auth_identity_key,
     atomic_write_bytes,
@@ -1611,7 +1612,7 @@ class ClaudeCodeHubPaths:
         )
 
 
-class ClaudeCodeHub:
+class ClaudeCodeHub(BaseAccountHub):
     def __init__(
         self,
         paths: ClaudeCodeHubPaths | None = None,
@@ -1619,12 +1620,45 @@ class ClaudeCodeHub:
         usage_client: ClaudeUsageClient | None = None,
         session_store: ClaudeUsageSessionStore | None = None,
     ) -> None:
-        self.paths = paths or ClaudeCodeHubPaths.defaults()
+        resolved = paths or ClaudeCodeHubPaths.defaults()
         self.backend = backend or SubprocessClaudeCodeBackend()
         self.usage_client = usage_client or ClaudeAiWebUsageClient()
         self.session_store = session_store or KeychainClaudeUsageSessionStore()
-        self.paths.data_root.mkdir(parents=True, exist_ok=True)
-        self.paths.accounts_root.mkdir(parents=True, exist_ok=True)
+        super().__init__(resolved)
+
+    # --- BaseAccountHub abstract method implementations ---
+
+    def account_data_exists(self, account_id: str) -> bool:
+        return self.account_secret_path(account_id).is_file()
+
+    def read_account_summary(self, account_id: str) -> dict[str, Any]:
+        return self.saved_account_summary(account_id)
+
+    def identity_key(self, summary: dict[str, Any]) -> str | None:
+        return claude_identity_key(summary)
+
+    def _on_clear_duplicate(self, target_account_id: str, duplicate_account_id: str) -> None:
+        target_auth = self.saved_usage_auth(target_account_id)
+        other_auth = self.saved_usage_auth(duplicate_account_id)
+        if not target_auth.get("configured") and other_auth.get("configured"):
+            session_key = self.session_store.read_optional(duplicate_account_id)
+            organization_id = str(other_auth.get("organization_id") or "").strip()
+            if session_key and organization_id:
+                self.session_store.write(target_account_id, session_key)
+                self._write_usage_auth(
+                    target_account_id,
+                    organization_id=organization_id,
+                    organization_name=other_auth.get("organization_name"),
+                )
+                other_cache_path = self.usage_cache_path(duplicate_account_id)
+                if other_cache_path.is_file():
+                    shutil.copy2(other_cache_path, self.usage_cache_path(target_account_id))
+
+        parent = self.account_secret_path(duplicate_account_id).parent
+        if parent.exists():
+            shutil.rmtree(parent, ignore_errors=True)
+        self.session_store.delete(duplicate_account_id)
+        self.remove_usage_menu_bar_account(duplicate_account_id)
 
     def account_secret_path(self, account_id: str) -> Path:
         return self.paths.accounts_root / account_id / "credentials.json"
@@ -1825,90 +1859,6 @@ class ClaudeCodeHub:
         current = self.current_overview()
         self.write_statusline_runtime_cache(current=current)
         return self.statusline_overview(current=current)
-
-    def load_state(self) -> dict[str, Any]:
-        if not self.paths.state_path.is_file():
-            state = default_state()
-            self.save_state(state)
-            return state
-
-        state = load_json_file(self.paths.state_path)
-        accounts_payload = state.get("accounts")
-        if not isinstance(accounts_payload, list):
-            raise AuthHubError(f"{self.paths.state_path} is missing a valid accounts array")
-
-        normalized_accounts = self._normalize_accounts(accounts_payload)
-        normalized_state = {"version": 2, "accounts": normalized_accounts}
-        if state.get("version") != 2 or state.get("accounts") != normalized_accounts:
-            self.save_state(normalized_state)
-        return normalized_state
-
-    def save_state(self, state: dict[str, Any]) -> None:
-        atomic_write_json(self.paths.state_path, state)
-
-    def _normalize_accounts(self, accounts_payload: list[Any]) -> list[dict[str, Any]]:
-        normalized_accounts: list[dict[str, Any]] = []
-        seen_ids: set[str] = set()
-
-        for item in accounts_payload:
-            if not isinstance(item, dict):
-                continue
-
-            account_id = str(item.get("id") or "").strip()
-            if not account_id or account_id in seen_ids:
-                continue
-
-            secret_path = self.account_secret_path(account_id)
-            if not secret_path.is_file():
-                continue
-
-            snapshot = self.saved_account_summary(account_id)
-            existing_label = str(item.get("label") or "").strip()
-            normalized_accounts.append(
-                {
-                    "id": account_id,
-                    "label": suggested_account_label(snapshot, len(normalized_accounts) + 1)
-                    if is_placeholder_account_label(existing_label, account_id)
-                    else existing_label,
-                    "created_at": item.get("created_at"),
-                    "updated_at": item.get("updated_at"),
-                }
-            )
-            seen_ids.add(account_id)
-
-        return normalized_accounts
-
-    def next_account_id(self) -> str:
-        existing_ids = {str(account.get("id")) for account in self.load_state()["accounts"]}
-        next_index = 1
-        while True:
-            candidate = f"account-{next_index}"
-            if candidate not in existing_ids:
-                return candidate
-            next_index += 1
-
-    def get_account(self, account_id: str) -> dict[str, Any]:
-        for account in self.load_state()["accounts"]:
-            if account.get("id") == account_id:
-                return account
-        raise AuthHubError(f"account {account_id} not found")
-
-    def update_account(self, account_id: str, **updates: Any) -> dict[str, Any]:
-        state = self.load_state()
-        for account in state["accounts"]:
-            if account.get("id") == account_id:
-                account.update(updates)
-                self.save_state(state)
-                return account
-        raise AuthHubError(f"account {account_id} not found")
-
-    def rename_account(self, account_id: str, label: str) -> dict[str, Any]:
-        if not label.strip():
-            raise AuthHubError("label must not be empty")
-        return self.update_account(account_id, label=label.strip())
-
-    def rename_slot(self, slot_id: str, label: str) -> dict[str, Any]:
-        return self.rename_account(slot_id, label)
 
     def _current_secret_payload(self) -> tuple[dict[str, Any], str | None]:
         return self.backend.read_secret_payload()
@@ -2418,27 +2368,6 @@ class ClaudeCodeHub:
             "data_root": str(self.paths.data_root),
         }
 
-    def find_account_id_by_identity(self, identity_key: str) -> str | None:
-        for account in self.load_state()["accounts"]:
-            account_id = str(account["id"])
-            summary = self.saved_account_summary(account_id)
-            if claude_identity_key(summary) == identity_key:
-                return account_id
-        return None
-
-    def account_label(self, account_id: str | None) -> str | None:
-        if not account_id:
-            return None
-        try:
-            account = self.get_account(account_id)
-        except AuthHubError:
-            return None
-        snapshot = self.saved_account_summary(account_id)
-        existing_label = str(account.get("label") or "").strip()
-        if snapshot.get("exists") and is_placeholder_account_label(existing_label, account_id):
-            return suggested_account_label(snapshot)
-        return existing_label or (suggested_account_label(snapshot) if snapshot.get("exists") else account_id)
-
     def account_overview(self, account_id: str) -> dict[str, Any]:
         account = dict(self.get_account(account_id))
         snapshot = self.saved_account_summary(account_id)
@@ -2609,56 +2538,6 @@ class ClaudeCodeHub:
         result["status"] = "updated"
         result["updated"] = True
         return result
-
-    def _clear_duplicate_accounts(self, target_account_id: str) -> list[str]:
-        target_summary = self.saved_account_summary(target_account_id)
-        target_identity = claude_identity_key(target_summary)
-        if not target_identity:
-            return []
-
-        state = self.load_state()
-        remaining_accounts: list[dict[str, Any]] = []
-        cleared_account_ids: list[str] = []
-        for account in state["accounts"]:
-            account_id = str(account["id"])
-            if account_id == target_account_id:
-                remaining_accounts.append(account)
-                continue
-
-            other_summary = self.saved_account_summary(account_id)
-            if claude_identity_key(other_summary) != target_identity:
-                remaining_accounts.append(account)
-                continue
-
-            target_auth = self.saved_usage_auth(target_account_id)
-            other_auth = self.saved_usage_auth(account_id)
-            if not target_auth.get("configured") and other_auth.get("configured"):
-                session_key = self.session_store.read_optional(account_id)
-                organization_id = str(other_auth.get("organization_id") or "").strip()
-                if session_key and organization_id:
-                    self.session_store.write(target_account_id, session_key)
-                    self._write_usage_auth(
-                        target_account_id,
-                        organization_id=organization_id,
-                        organization_name=other_auth.get("organization_name"),
-                    )
-                    other_cache_path = self.usage_cache_path(account_id)
-                    if other_cache_path.is_file():
-                        shutil.copy2(other_cache_path, self.usage_cache_path(target_account_id))
-
-            parent = self.account_secret_path(account_id).parent
-            if parent.exists():
-                shutil.rmtree(parent, ignore_errors=True)
-            self.session_store.delete(account_id)
-            self.remove_usage_menu_bar_account(account_id)
-            cleared_account_ids.append(account_id)
-
-        if cleared_account_ids:
-            state["accounts"] = remaining_accounts
-            self.save_state(state)
-
-        return cleared_account_ids
-
 
 class UnifiedAuthHub:
     def __init__(
