@@ -4554,7 +4554,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_auth_match:
-            provider = provider_usage_auth_match.group(1)
+            provider = normalize_provider_name(provider_usage_auth_match.group(1))
             slot_id = provider_usage_auth_match.group(2)
             payload = self._read_json_body()
             try:
@@ -4577,7 +4577,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_clear_match:
-            provider = provider_usage_clear_match.group(1)
+            provider = normalize_provider_name(provider_usage_clear_match.group(1))
             slot_id = provider_usage_clear_match.group(2)
             self._read_json_body()
             try:
@@ -4593,7 +4593,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_refresh_match:
-            provider = provider_usage_refresh_match.group(1)
+            provider = normalize_provider_name(provider_usage_refresh_match.group(1))
             slot_id = provider_usage_refresh_match.group(2)
             self._read_json_body()
             try:
@@ -4609,7 +4609,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_refresh_all_match:
-            provider = provider_usage_refresh_all_match.group(1)
+            provider = normalize_provider_name(provider_usage_refresh_all_match.group(1))
             self._read_json_body()
             try:
                 result = self.hub.refresh_all_usage(provider)
@@ -4624,7 +4624,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_menu_bar_match:
-            provider = provider_usage_menu_bar_match.group(1)
+            provider = normalize_provider_name(provider_usage_menu_bar_match.group(1))
             slot_id = provider_usage_menu_bar_match.group(2)
             payload = self._read_json_body()
             try:
@@ -4651,7 +4651,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
 
         provider_rename_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/rename", self.path)
         if provider_rename_match:
-            provider = provider_rename_match.group(1)
+            provider = normalize_provider_name(provider_rename_match.group(1))
             slot_id = provider_rename_match.group(2)
             payload = self._read_json_body()
             try:
@@ -4677,7 +4677,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
 
         provider_capture_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/capture", self.path)
         if provider_capture_match:
-            provider = provider_capture_match.group(1)
+            provider = normalize_provider_name(provider_capture_match.group(1))
             slot_id = provider_capture_match.group(2)
             self._read_json_body()
             try:
@@ -4702,7 +4702,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
 
         provider_switch_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/switch", self.path)
         if provider_switch_match:
-            provider = provider_switch_match.group(1)
+            provider = normalize_provider_name(provider_switch_match.group(1))
             slot_id = provider_switch_match.group(2)
             self._read_json_body()
             try:
@@ -4730,7 +4730,7 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_clear_match:
-            provider = provider_clear_match.group(1)
+            provider = normalize_provider_name(provider_clear_match.group(1))
             slot_id = provider_clear_match.group(2)
             self._read_json_body()
             try:
@@ -4747,7 +4747,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
         return
 
     def _read_json_body(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except (ValueError, TypeError):
+            length = 0
         if length <= 0:
             return {}
         raw = self.rfile.read(length)
