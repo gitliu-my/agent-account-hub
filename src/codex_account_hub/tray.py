@@ -27,6 +27,8 @@ DEFAULT_USAGE_AUTO_REFRESH_SECONDS = 5 * 60
 MENU_BAR_GROUP_GAP = 4.0
 TRAY_UI_POLL_SECONDS = 1.0
 STATUS_ITEM_HIDDEN_TITLE = "\u200b"
+DEFAULT_MENU_BAR_ICON_STYLE = "double-bars"
+DEFAULT_MENU_BAR_OUTLINE_STYLE = "platform"
 
 try:
     import AppKit
@@ -91,6 +93,7 @@ def tray_usage_slots(overview: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(slots, list):
         return []
     provider_id = str(overview.get("provider_id") or "").strip() or None
+    usage_display_preferences = overview.get("usage_display_preferences") or {}
     normalized_slots: list[dict[str, Any]] = []
     for slot in slots:
         if not isinstance(slot, dict):
@@ -98,6 +101,8 @@ def tray_usage_slots(overview: dict[str, Any]) -> list[dict[str, Any]]:
         payload = dict(slot)
         if provider_id and not payload.get("provider_id"):
             payload["provider_id"] = provider_id
+        if not payload.get("usage_display_preferences"):
+            payload["usage_display_preferences"] = dict(usage_display_preferences)
         normalized_slots.append(payload)
     return normalized_slots
 
@@ -139,9 +144,27 @@ def _nscolor_for_tone(tone: str) -> Any:
     return AppKit.NSColor.tertiaryLabelColor()
 
 
-def _slot_frame_stroke_color(provider_id: str | None) -> Any:
+def slot_usage_display_preferences(slot: dict[str, Any]) -> dict[str, Any]:
+    stored = slot.get("usage_display_preferences") or {}
+    icon_style = str(stored.get("icon_style") or "").strip().lower()
+    outline_style = str(stored.get("outline_style") or "").strip().lower()
+    return {
+        "icon_style": icon_style if icon_style in {"double-bars", "double-rings"} else DEFAULT_MENU_BAR_ICON_STYLE,
+        "outline_style": outline_style if outline_style in {"platform", "neutral", "accent"} else DEFAULT_MENU_BAR_OUTLINE_STYLE,
+    }
+
+
+def _slot_frame_stroke_color(provider_id: str | None, outline_style: str = DEFAULT_MENU_BAR_OUTLINE_STYLE) -> Any:
     if AppKit is None:
         return None
+    if outline_style == "neutral":
+        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.38)
+    if outline_style == "accent":
+        if provider_id == "claude-code":
+            return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.98)
+        if provider_id == "codex":
+            return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.9)
+        return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.82)
     if provider_id == "claude-code":
         return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.9)
     if provider_id == "codex":
@@ -149,9 +172,17 @@ def _slot_frame_stroke_color(provider_id: str | None) -> Any:
     return AppKit.NSColor.separatorColor().colorWithAlphaComponent_(0.35)
 
 
-def _slot_frame_fill_color(provider_id: str | None) -> Any:
+def _slot_frame_fill_color(provider_id: str | None, outline_style: str = DEFAULT_MENU_BAR_OUTLINE_STYLE) -> Any:
     if AppKit is None:
         return None
+    if outline_style == "neutral":
+        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.06)
+    if outline_style == "accent":
+        if provider_id == "claude-code":
+            return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.16)
+        if provider_id == "codex":
+            return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.14)
+        return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.1)
     if provider_id == "claude-code":
         return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.12)
     if provider_id == "codex":
@@ -159,14 +190,47 @@ def _slot_frame_fill_color(provider_id: str | None) -> Any:
     return AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.22)
 
 
-def _slot_active_indicator_color(provider_id: str | None) -> Any:
+def _slot_active_indicator_color(provider_id: str | None, outline_style: str = DEFAULT_MENU_BAR_OUTLINE_STYLE) -> Any:
     if AppKit is None:
         return None
+    if outline_style == "neutral":
+        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.66)
+    if outline_style == "accent":
+        if provider_id == "claude-code":
+            return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(1.0)
+        if provider_id == "codex":
+            return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.98)
+        return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.95)
     if provider_id == "claude-code":
         return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.95)
     if provider_id == "codex":
         return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.92)
     return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.88)
+
+
+def _draw_progress_ring(rect: Any, percent: Any, status: str, tone: str) -> None:
+    if AppKit is None or Foundation is None:
+        return
+    track = AppKit.NSBezierPath.bezierPathWithOvalInRect_(rect)
+    AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.24).setStroke()
+    track.setLineWidth_(1.8)
+    track.stroke()
+
+    fill_color = _nscolor_for_tone(tone)
+    if fill_color is None:
+        return
+    try:
+        normalized = max(0.0, min(100.0, float(percent)))
+    except (TypeError, ValueError):
+        normalized = 100.0 if status in {"unauthorized", "error", "auth_missing"} else 12.0
+    sweep = max(14.0, 360.0 * normalized / 100.0)
+    radius = min(rect.size.width, rect.size.height) / 2.0 - 0.9
+    center = Foundation.NSMakePoint(rect.origin.x + rect.size.width / 2.0, rect.origin.y + rect.size.height / 2.0)
+    arc = AppKit.NSBezierPath.bezierPath()
+    arc.appendBezierPathWithArcWithCenter_radius_startAngle_endAngle_clockwise_(center, radius, 90.0, 90.0 - sweep, True)
+    arc.setLineWidth_(1.8)
+    fill_color.setStroke()
+    arc.stroke()
 
 
 def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None:
@@ -177,30 +241,55 @@ def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None
         return None
 
     slot_count = len(slots)
-    group_padding_x = 3.2
-    bar_width = max(16.5, 27.0 - max(0, slot_count - 1) * 1.45)
-    group_width = bar_width + group_padding_x * 2.0
-    image_width = 4.0 + slot_count * group_width + max(0, slot_count - 1) * MENU_BAR_GROUP_GAP
+    slot_layouts: list[dict[str, Any]] = []
+    for slot in slots:
+        preferences = slot_usage_display_preferences(slot)
+        if preferences["icon_style"] == "double-rings":
+            group_width = max(22.0, 28.0 - max(0, slot_count - 1) * 1.0)
+            slot_layouts.append(
+                {
+                    "preferences": preferences,
+                    "group_padding_x": 2.6,
+                    "group_width": group_width,
+                    "ring_size": min(7.2, max(5.8, group_width / 3.3)),
+                }
+            )
+        else:
+            group_padding_x = 3.2
+            bar_width = max(16.5, 27.0 - max(0, slot_count - 1) * 1.45)
+            slot_layouts.append(
+                {
+                    "preferences": preferences,
+                    "group_padding_x": group_padding_x,
+                    "group_width": bar_width + group_padding_x * 2.0,
+                    "bar_width": bar_width,
+                }
+            )
+
+    image_width = 4.0 + sum(layout["group_width"] for layout in slot_layouts) + max(0, slot_count - 1) * MENU_BAR_GROUP_GAP
     size = Foundation.NSMakeSize(image_width, 18.0)
     image = AppKit.NSImage.alloc().initWithSize_(size)
     image.setTemplate_(False)
     image.lockFocus()
 
     group_x = 2.0
-    for slot in slots:
+    for slot, layout in zip(slots, slot_layouts):
         provider_id = str(slot.get("provider_id") or "").strip() or None
         usage = slot.get("usage") or {}
         status = str(usage.get("status") or "")
         is_active = bool(slot.get("active"))
+        preferences = layout["preferences"]
+        outline_style = preferences["outline_style"]
+        group_width = layout["group_width"]
 
         group_rect = Foundation.NSMakeRect(group_x, 1.0, group_width, 16.0)
         group_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(group_rect, 4.0, 4.0)
-        frame_fill = _slot_frame_fill_color(provider_id) or AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.22)
+        frame_fill = _slot_frame_fill_color(provider_id, outline_style) or AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.22)
         if is_active:
             frame_fill = frame_fill.colorWithAlphaComponent_(min(0.32, frame_fill.alphaComponent() + 0.12))
         frame_fill.setFill()
         group_path.fill()
-        frame_stroke = _slot_frame_stroke_color(provider_id) or AppKit.NSColor.separatorColor().colorWithAlphaComponent_(0.28)
+        frame_stroke = _slot_frame_stroke_color(provider_id, outline_style) or AppKit.NSColor.separatorColor().colorWithAlphaComponent_(0.28)
         frame_stroke.setStroke()
         group_path.setLineWidth_(1.65 if is_active else 1.1)
         group_path.stroke()
@@ -208,41 +297,56 @@ def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None
         if is_active:
             inner_rect = Foundation.NSMakeRect(group_x + 0.85, 1.85, group_width - 1.7, 14.3)
             inner_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(inner_rect, 3.2, 3.2)
-            (_slot_active_indicator_color(provider_id) or AppKit.NSColor.controlAccentColor()).setStroke()
+            (_slot_active_indicator_color(provider_id, outline_style) or AppKit.NSColor.controlAccentColor()).setStroke()
             inner_path.setLineWidth_(1.05)
             inner_path.stroke()
 
-        bar_x = group_x + group_padding_x
-        top_track = Foundation.NSMakeRect(bar_x, 9.5, bar_width, 3.0)
-        bottom_track = Foundation.NSMakeRect(bar_x, 4.5, bar_width, 3.0)
-        for rect, percent in (
-            (top_track, usage.get("five_hour_percent")),
-            (bottom_track, usage.get("seven_day_percent")),
-        ):
-            track_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(rect, 2.0, 2.0)
-            AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.26).setFill()
-            track_path.fill()
-
-            tone = usage_progress_tone(percent, status=status)
-            fill_color = _nscolor_for_tone(tone)
-            if fill_color is None:
-                continue
-
-            try:
-                normalized = max(0.0, min(100.0, float(percent)))
-            except (TypeError, ValueError):
-                normalized = 100.0 if status in {"unauthorized", "error", "auth_missing"} else 12.0
-
-            fill_width = max(2.0, rect.size.width * normalized / 100.0)
-            fill_rect = Foundation.NSMakeRect(
-                rect.origin.x,
-                rect.origin.y,
-                fill_width,
-                rect.size.height,
+        if preferences["icon_style"] == "double-rings":
+            ring_size = layout["ring_size"]
+            ring_gap = 2.2
+            total_width = ring_size * 2.0 + ring_gap
+            start_x = group_x + (group_width - total_width) / 2.0
+            ring_y = 4.3
+            ring_specs = (
+                (Foundation.NSMakeRect(start_x, ring_y, ring_size, ring_size), usage.get("five_hour_percent")),
+                (Foundation.NSMakeRect(start_x + ring_size + ring_gap, ring_y, ring_size, ring_size), usage.get("seven_day_percent")),
             )
-            fill_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(fill_rect, 2.0, 2.0)
-            fill_color.setFill()
-            fill_path.fill()
+            for rect, percent in ring_specs:
+                _draw_progress_ring(rect, percent, status, usage_progress_tone(percent, status=status))
+        else:
+            group_padding_x = layout["group_padding_x"]
+            bar_width = layout["bar_width"]
+            bar_x = group_x + group_padding_x
+            top_track = Foundation.NSMakeRect(bar_x, 9.5, bar_width, 3.0)
+            bottom_track = Foundation.NSMakeRect(bar_x, 4.5, bar_width, 3.0)
+            for rect, percent in (
+                (top_track, usage.get("five_hour_percent")),
+                (bottom_track, usage.get("seven_day_percent")),
+            ):
+                track_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(rect, 2.0, 2.0)
+                AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.26).setFill()
+                track_path.fill()
+
+                tone = usage_progress_tone(percent, status=status)
+                fill_color = _nscolor_for_tone(tone)
+                if fill_color is None:
+                    continue
+
+                try:
+                    normalized = max(0.0, min(100.0, float(percent)))
+                except (TypeError, ValueError):
+                    normalized = 100.0 if status in {"unauthorized", "error", "auth_missing"} else 12.0
+
+                fill_width = max(2.0, rect.size.width * normalized / 100.0)
+                fill_rect = Foundation.NSMakeRect(
+                    rect.origin.x,
+                    rect.origin.y,
+                    fill_width,
+                    rect.size.height,
+                )
+                fill_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(fill_rect, 2.0, 2.0)
+                fill_color.setFill()
+                fill_path.fill()
 
         group_x += group_width + MENU_BAR_GROUP_GAP
 

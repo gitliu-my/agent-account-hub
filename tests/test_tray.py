@@ -91,6 +91,11 @@ class TrayHelpersTests(unittest.TestCase):
     def test_tray_usage_slots_reads_selected_menu_bar_accounts(self) -> None:
         overview = {
             "provider_id": "codex",
+            "usage_display_preferences": {
+                "selected_account_ids": ["account-1", "account-2"],
+                "icon_style": "double-rings",
+                "outline_style": "accent",
+            },
             "usage_menu_bar_accounts": [
                 {"id": "account-1", "active": True, "usage": {"five_hour_percent": 21.0}},
                 {"id": "account-2", "active": False, "usage": {"seven_day_percent": 64.0}},
@@ -100,6 +105,8 @@ class TrayHelpersTests(unittest.TestCase):
         self.assertEqual([slot["id"] for slot in slots], ["account-1", "account-2"])
         self.assertEqual([slot["provider_id"] for slot in slots], ["codex", "codex"])
         self.assertEqual([slot["active"] for slot in slots], [True, False])
+        self.assertEqual([slot["usage_display_preferences"]["icon_style"] for slot in slots], ["double-rings", "double-rings"])
+        self.assertEqual([slot["usage_display_preferences"]["outline_style"] for slot in slots], ["accent", "accent"])
 
     def test_usage_progress_tone_keeps_zero_percent_green_even_if_stale(self) -> None:
         self.assertEqual(usage_progress_tone(0, status="stale"), "good")

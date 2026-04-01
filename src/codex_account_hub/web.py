@@ -1213,6 +1213,168 @@ INDEX_HTML = """<!doctype html>
       word-break: break-word;
     }
 
+    .selection-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .selection-order {
+      min-width: 42px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(30, 25, 22, 0.06);
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-align: center;
+    }
+
+    .field-stack {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .menu-bar-style-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .menu-bar-style-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .menu-bar-preview-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(30, 25, 22, 0.08);
+      background: rgba(255, 255, 255, 0.72);
+      min-width: 0;
+    }
+
+    .menu-bar-preview-copy {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .menu-bar-preview-title {
+      font-weight: 650;
+      font-size: 0.92rem;
+    }
+
+    .menu-bar-preview-note {
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+
+    .menu-bar-icon-frame {
+      --outline: rgba(22, 93, 99, 0.42);
+      --fill: rgba(22, 93, 99, 0.08);
+      --active: rgba(22, 93, 99, 0.8);
+      flex: 0 0 auto;
+      width: 38px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1.4px solid var(--outline);
+      background: var(--fill);
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .menu-bar-icon-frame.provider-codex {
+      --outline: rgba(22, 25, 30, 0.34);
+      --fill: rgba(22, 25, 30, 0.06);
+      --active: rgba(57, 123, 255, 0.86);
+    }
+
+    .menu-bar-icon-frame.provider-claude-code {
+      --outline: rgba(244, 122, 32, 0.88);
+      --fill: rgba(244, 122, 32, 0.12);
+      --active: rgba(244, 122, 32, 0.98);
+    }
+
+    .menu-bar-icon-frame.outline-neutral {
+      --outline: rgba(22, 25, 30, 0.3);
+      --fill: rgba(22, 25, 30, 0.05);
+      --active: rgba(22, 25, 30, 0.55);
+    }
+
+    .menu-bar-icon-frame.outline-accent.provider-codex {
+      --outline: rgba(57, 123, 255, 0.88);
+      --fill: rgba(57, 123, 255, 0.12);
+      --active: rgba(57, 123, 255, 0.98);
+    }
+
+    .menu-bar-icon-frame.outline-accent.provider-claude-code {
+      --outline: rgba(255, 132, 46, 0.98);
+      --fill: rgba(255, 132, 46, 0.16);
+      --active: rgba(255, 132, 46, 1);
+    }
+
+    .menu-bar-icon-frame.active::after {
+      content: "";
+      position: absolute;
+      inset: 1.8px;
+      border-radius: 4px;
+      border: 1px solid var(--active);
+      pointer-events: none;
+    }
+
+    .menu-bar-bars {
+      display: grid;
+      gap: 3px;
+      width: 24px;
+    }
+
+    .menu-bar-bar-track {
+      width: 24px;
+      height: 3px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(22, 25, 30, 0.12);
+    }
+
+    .menu-bar-bar-fill {
+      height: 100%;
+      min-width: 2px;
+      border-radius: inherit;
+      width: calc(var(--progress, 12) * 1%);
+      background: var(--bar-color, #4bd27f);
+    }
+
+    .menu-bar-rings {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .menu-bar-ring {
+      position: relative;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: conic-gradient(var(--ring-color, #4bd27f) calc(var(--progress, 12) * 1%), rgba(22, 25, 30, 0.14) 0);
+    }
+
+    .menu-bar-ring::after {
+      content: "";
+      position: absolute;
+      inset: 1.9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.96);
+    }
+
     .mini-usage {
       display: grid;
       gap: 8px;
@@ -2935,6 +3097,79 @@ INDEX_HTML = """<!doctype html>
       return parts.join(" · ") || "本地已保存认证";
     }
 
+    function menuBarDisplayPreferences(state = latestState) {
+      const stored = (state && state.usage_display_preferences) || {};
+      const iconStyle = stored.icon_style === "double-rings" ? "double-rings" : "double-bars";
+      const outlineStyle = ["platform", "neutral", "accent"].includes(stored.outline_style)
+        ? stored.outline_style
+        : "platform";
+      const selectedIds = Array.isArray(stored.selected_account_ids)
+        ? stored.selected_account_ids.map((value) => String(value || "").trim()).filter(Boolean)
+        : [];
+      return {
+        selected_account_ids: selectedIds,
+        icon_style: iconStyle,
+        outline_style: outlineStyle
+      };
+    }
+
+    function menuBarIconStyleLabel(value) {
+      if (value === "double-rings") {
+        return "双环";
+      }
+      return "横向双条";
+    }
+
+    function menuBarOutlineStyleLabel(value) {
+      if (value === "neutral") {
+        return "中性";
+      }
+      if (value === "accent") {
+        return "强调";
+      }
+      return "跟随平台";
+    }
+
+    function menuBarProgressColor(value) {
+      const tone = usageMetricTone(value);
+      if (tone === "bad") {
+        return "#ff6b6b";
+      }
+      if (tone === "warn") {
+        return "#ffb347";
+      }
+      return "#41d77b";
+    }
+
+    function menuBarPreviewVisual(slot, preferences) {
+      const usage = slot.usage || {};
+      const providerClass = "provider-" + normalizeProvider(slot.provider_id || selectedProvider);
+      const outlineClass = "outline-" + preferences.outline_style;
+      const activeClass = slot.active ? "active" : "";
+      if (preferences.icon_style === "double-rings") {
+        return `
+          <div class="menu-bar-icon-frame ${providerClass} ${outlineClass} ${activeClass}">
+            <div class="menu-bar-rings">
+              <span class="menu-bar-ring" style="--progress:${escapeHtml(String(Math.max(4, Math.min(100, Number(usage.five_hour_percent ?? 12)))))};--ring-color:${escapeHtml(menuBarProgressColor(usage.five_hour_percent))}"></span>
+              <span class="menu-bar-ring" style="--progress:${escapeHtml(String(Math.max(4, Math.min(100, Number(usage.seven_day_percent ?? 24)))))};--ring-color:${escapeHtml(menuBarProgressColor(usage.seven_day_percent))}"></span>
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="menu-bar-icon-frame ${providerClass} ${outlineClass} ${activeClass}">
+          <div class="menu-bar-bars">
+            <div class="menu-bar-bar-track">
+              <div class="menu-bar-bar-fill" style="--progress:${escapeHtml(String(Math.max(8, Math.min(100, Number(usage.five_hour_percent ?? 12)))))};--bar-color:${escapeHtml(menuBarProgressColor(usage.five_hour_percent))}"></div>
+            </div>
+            <div class="menu-bar-bar-track">
+              <div class="menu-bar-bar-fill" style="--progress:${escapeHtml(String(Math.max(8, Math.min(100, Number(usage.seven_day_percent ?? 24)))))};--bar-color:${escapeHtml(menuBarProgressColor(usage.seven_day_percent))}"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function detailCard(label, value) {
       return `
         <div class="detail-card">
@@ -3562,51 +3797,73 @@ INDEX_HTML = """<!doctype html>
       `;
     }
 
-    function menuBarSelectionRow(slot) {
+    function selectedMenuBarRow(slot, index, total, preferences) {
       const encodedSlotId = encodeSlotId(slot.id);
-      const disabled = !(slot.usage_menu_bar_visible || slot.usage_menu_bar_eligible);
-      const classes = ["selection-row"];
-      if (disabled) {
-        classes.push("disabled");
-      }
       return `
-        <div class="${classes.join(" ")}">
+        <div class="selection-row">
           <div class="selection-copy">
             <div class="selection-title">${text(accountDisplayTitle(slot))}</div>
-            <div class="selection-subtitle">${text(menuBarEligibilityNote(slot))}</div>
+            <div class="selection-subtitle">${text(accountIdentityLine(slot))}</div>
             <div class="chip-row">
-              ${slot.usage_menu_bar_visible ? chip("菜单栏展示中", "good") : chip("未展示", "muted")}
-              ${chip(usageSummaryText(slot.usage || {}, slot.usage_auth || {}), usageMetricTone((slot.usage || {}).seven_day_percent))}
+              ${chip("展示中", "good")}
+              ${slot.active ? chip("当前认证", "accent") : ""}
             </div>
           </div>
-          <button
-            class="button secondary"
-            type="button"
-            data-action="toggle-menu-bar"
-            data-slot-id="${encodedSlotId}"
-            data-visible="${slot.usage_menu_bar_visible ? "1" : "0"}"
-            title="${slot.usage_menu_bar_visible ? "把这个账号从菜单栏用量展示中移除" : "把这个账号加入菜单栏用量展示"}"
-            ${disabled ? "disabled" : ""}>
-            ${slot.usage_menu_bar_visible ? "移出" : "加入"}
-          </button>
+          <div class="selection-actions">
+            <span class="selection-order">#${index + 1}</span>
+            ${menuBarPreviewVisual(slot, preferences)}
+            <button
+              class="button ghost"
+              type="button"
+              data-action="move-menu-bar"
+              data-slot-id="${encodedSlotId}"
+              data-direction="-1"
+              title="向前移动这个账号"
+              ${index === 0 ? "disabled" : ""}>
+              上移
+            </button>
+            <button
+              class="button ghost"
+              type="button"
+              data-action="move-menu-bar"
+              data-slot-id="${encodedSlotId}"
+              data-direction="1"
+              title="向后移动这个账号"
+              ${index === total - 1 ? "disabled" : ""}>
+              下移
+            </button>
+            <button
+              class="button secondary"
+              type="button"
+              data-action="toggle-menu-bar"
+              data-slot-id="${encodedSlotId}"
+              data-visible="1"
+              title="把这个账号从菜单栏展示中移除">
+              移出
+            </button>
+          </div>
         </div>
       `;
     }
 
-    function menuBarPreviewCard(slot) {
-      const usage = slot.usage || {};
+    function eligibleMenuBarRow(slot) {
+      const encodedSlotId = encodeSlotId(slot.id);
       return `
-        <div class="module-card">
-          <div class="module-head">
-            <div class="module-copy">
-              <div class="module-title">${text(accountDisplayTitle(slot))}</div>
-              <div class="module-description">${text(usageSummaryText(usage, slot.usage_auth || {}))}</div>
-            </div>
-            <div class="chip-row">${chip("展示中", "good")}</div>
+        <div class="selection-row">
+          <div class="selection-copy">
+            <div class="selection-title">${text(accountDisplayTitle(slot))}</div>
+            <div class="selection-subtitle">${text(accountIdentityLine(slot))}</div>
           </div>
-          <div class="mini-usage">
-            ${miniUsageRow("5h", usage.five_hour_percent)}
-            ${miniUsageRow("7d", usage.seven_day_percent)}
+          <div class="selection-actions">
+            <button
+              class="button secondary"
+              type="button"
+              data-action="toggle-menu-bar"
+              data-slot-id="${encodedSlotId}"
+              data-visible="0"
+              title="把这个账号加入菜单栏展示">
+              加入
+            </button>
           </div>
         </div>
       `;
@@ -3641,30 +3898,90 @@ INDEX_HTML = """<!doctype html>
       }
 
       const accounts = savedAccounts(state);
-      const selectedAccounts = accounts.filter((slot) => slot.usage_menu_bar_visible);
-      const eligibleAccounts = accounts.filter((slot) => slot.usage_menu_bar_eligible);
+      const preferences = menuBarDisplayPreferences(state);
+      const selectedAccounts = Array.isArray(state.usage_menu_bar_accounts) ? state.usage_menu_bar_accounts : [];
+      const selectedIds = new Set(selectedAccounts.map((slot) => slot.id));
+      const eligibleAccounts = accounts.filter((slot) => slot.usage_menu_bar_eligible && !selectedIds.has(slot.id));
+      const unavailableCount = accounts.filter((slot) => !slot.usage_menu_bar_eligible).length;
       node.className = "config-card";
       node.innerHTML = `
         <div class="module-head">
           <div class="module-copy">
-            ${titledModuleTitle("菜单栏展示", "只在这里管理哪些账号进入菜单栏展示。无效账号会保留原因说明，但不能加入。")}
+            ${titledModuleTitle("菜单栏展示", "这里管理展示账号、排列顺序和样式。当前展示顺序会直接影响右上角菜单栏里各账号的排列。")}
           </div>
           <div class="chip-row">
             ${chip(selectedAccounts.length + " 个展示中", selectedAccounts.length ? "good" : "muted")}
             ${chip(eligibleAccounts.length + " 个可选账号", eligibleAccounts.length ? "accent" : "muted")}
+            ${unavailableCount ? chip(unavailableCount + " 个暂不可用", "muted") : ""}
           </div>
         </div>
 
-        <div class="preview-stack">
-          ${selectedAccounts.length
-            ? selectedAccounts.map(menuBarPreviewCard).join("")
-            : `<div class="empty-state">还没有账号加入菜单栏展示。先为账号配置 claude.ai 认证并成功刷新一次用量，然后再加入。</div>`}
-        </div>
+        <div class="module-stack">
+          <section class="module-card">
+            <div class="module-head">
+              <div class="module-copy">
+                ${titledModuleTitle("展示样式", "可以切换菜单栏图标的主体样式，以及外轮廓颜色风格。")}
+              </div>
+              <div class="chip-row">
+                ${chip(menuBarIconStyleLabel(preferences.icon_style), "accent")}
+                ${chip(menuBarOutlineStyleLabel(preferences.outline_style), "muted")}
+              </div>
+            </div>
+            <div class="menu-bar-style-grid">
+              <label class="field-stack">
+                <span class="field-label">图标样式</span>
+                <select class="field-select" data-role="menu-bar-icon-style">
+                  <option value="double-bars" ${preferences.icon_style === "double-bars" ? "selected" : ""}>横向双条</option>
+                  <option value="double-rings" ${preferences.icon_style === "double-rings" ? "selected" : ""}>双环</option>
+                </select>
+              </label>
+              <label class="field-stack">
+                <span class="field-label">外框配色</span>
+                <select class="field-select" data-role="menu-bar-outline-style">
+                  <option value="platform" ${preferences.outline_style === "platform" ? "selected" : ""}>跟随平台</option>
+                  <option value="neutral" ${preferences.outline_style === "neutral" ? "selected" : ""}>中性浅色</option>
+                  <option value="accent" ${preferences.outline_style === "accent" ? "selected" : ""}>强调对比</option>
+                </select>
+              </label>
+            </div>
+            <div class="menu-bar-style-preview">
+              ${(selectedAccounts.length ? selectedAccounts : accounts.filter((slot) => slot.usage_menu_bar_eligible).slice(0, 2)).map((slot) => `
+                <div class="menu-bar-preview-chip">
+                  ${menuBarPreviewVisual(slot, preferences)}
+                  <div class="menu-bar-preview-copy">
+                    <div class="menu-bar-preview-title">${text(accountDisplayTitle(slot))}</div>
+                    <div class="menu-bar-preview-note">${text(usageSummaryText(slot.usage || {}, slot.usage_auth || {}))}</div>
+                  </div>
+                </div>
+              `).join("") || `<div class="empty-state">先让账号成功获取一次用量，这里就会显示菜单栏样式预览。</div>`}
+            </div>
+          </section>
 
-        <div class="selection-stack">
-          ${accounts.length
-            ? accounts.map(menuBarSelectionRow).join("")
-            : `<div class="empty-state">当前还没有已保存账号。</div>`}
+          <section class="module-card">
+            <div class="module-head">
+              <div class="module-copy">
+                ${titledModuleTitle("当前展示", "这里列出正在显示在菜单栏里的账号。可以直接调整顺序，也可以移出。")}
+              </div>
+            </div>
+            <div class="selection-stack">
+              ${selectedAccounts.length
+                ? selectedAccounts.map((slot, index) => selectedMenuBarRow(slot, index, selectedAccounts.length, preferences)).join("")
+                : `<div class="empty-state">还没有账号加入菜单栏展示。先从下面的可选账号里加入一条。</div>`}
+            </div>
+          </section>
+
+          <section class="module-card">
+            <div class="module-head">
+              <div class="module-copy">
+                ${titledModuleTitle("可选账号", "这里只列出当前可以加入菜单栏展示的账号。用量异常或认证缺失的账号不会出现在这里。")}
+              </div>
+            </div>
+            <div class="selection-stack">
+              ${eligibleAccounts.length
+                ? eligibleAccounts.map(eligibleMenuBarRow).join("")
+                : `<div class="empty-state">当前没有额外可加入的账号。先刷新用量，或者把其他账号配置成可查询状态。</div>`}
+            </div>
+          </section>
         </div>
       `;
     }
@@ -4028,6 +4345,56 @@ INDEX_HTML = """<!doctype html>
       await refreshState({ quiet: true, skipUsageAutoRefresh: true });
     }
 
+    function currentMenuBarSelectionIds(state = latestState) {
+      const slots = (state && state.usage_menu_bar_accounts) || [];
+      return Array.isArray(slots)
+        ? slots.map((slot) => String((slot && slot.id) || "").trim()).filter(Boolean)
+        : [];
+    }
+
+    async function saveMenuBarDisplayPreferences(payload, options = {}) {
+      const provider = normalizeProvider(options.provider || selectedProvider);
+      const state = await request("/api/providers/" + encodeURIComponent(provider) + "/usage-display", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      if (provider === selectedProvider) {
+        if (state && state.capabilities) {
+          renderOverviewState(state, provider);
+        } else {
+          await refreshState({ quiet: true, skipUsageAutoRefresh: true, provider, showLoading: false });
+        }
+        setSyncPill(providerSyncLabel(provider) + " 已同步", "idle");
+      }
+      if (!options.quiet) {
+        flash(options.message || "菜单栏展示配置已保存");
+      }
+      return state;
+    }
+
+    async function moveMenuBarSelection(slotId, direction) {
+      const selectedIds = currentMenuBarSelectionIds();
+      const currentIndex = selectedIds.indexOf(slotId);
+      if (currentIndex === -1) {
+        return;
+      }
+      const nextIndex = currentIndex + direction;
+      if (nextIndex < 0 || nextIndex >= selectedIds.length) {
+        return;
+      }
+      const reordered = selectedIds.slice();
+      const [moved] = reordered.splice(currentIndex, 1);
+      reordered.splice(nextIndex, 0, moved);
+      const preferences = menuBarDisplayPreferences();
+      await saveMenuBarDisplayPreferences(
+        {
+          ...preferences,
+          selected_account_ids: reordered
+        },
+        { message: "已调整菜单栏顺序" }
+      );
+    }
+
     async function saveStatuslinePreferences(form, options = {}) {
       const payload = statuslineDraftFromForm(form);
       await request(providerActionPath("/statusline"), {
@@ -4323,8 +4690,25 @@ INDEX_HTML = """<!doctype html>
     });
 
     document.getElementById("menu-bar-config").addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-action='toggle-menu-bar']");
+      const button = event.target.closest("button[data-action]");
       if (!button || button.disabled) {
+        return;
+      }
+      if (button.dataset.action === "move-menu-bar") {
+        const slotId = decodeURIComponent(button.dataset.slotId || "");
+        const direction = Number(button.dataset.direction || "0");
+        if (!slotId || !Number.isFinite(direction) || !direction) {
+          return;
+        }
+        button.disabled = true;
+        moveMenuBarSelection(slotId, direction)
+          .catch((error) => flash(error.message, true))
+          .finally(() => {
+            button.disabled = false;
+          });
+        return;
+      }
+      if (button.dataset.action !== "toggle-menu-bar") {
         return;
       }
       const slotId = decodeURIComponent(button.dataset.slotId || "");
@@ -4336,6 +4720,37 @@ INDEX_HTML = """<!doctype html>
         .catch((error) => flash(error.message, true))
         .finally(() => {
           button.disabled = false;
+        });
+    });
+
+    document.getElementById("menu-bar-config").addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLSelectElement)) {
+        return;
+      }
+      if (!target.matches("[data-role='menu-bar-icon-style'], [data-role='menu-bar-outline-style']")) {
+        return;
+      }
+      const root = document.getElementById("menu-bar-config");
+      const iconSelect = root.querySelector("[data-role='menu-bar-icon-style']");
+      const outlineSelect = root.querySelector("[data-role='menu-bar-outline-style']");
+      if (!iconSelect || !outlineSelect) {
+        return;
+      }
+      const preferences = menuBarDisplayPreferences();
+      target.disabled = true;
+      saveMenuBarDisplayPreferences(
+        {
+          ...preferences,
+          selected_account_ids: currentMenuBarSelectionIds(),
+          icon_style: iconSelect.value,
+          outline_style: outlineSelect.value
+        },
+        { message: "菜单栏样式已更新" }
+      )
+        .catch((error) => flash(error.message, true))
+        .finally(() => {
+          target.disabled = false;
         });
     });
 
@@ -4554,10 +4969,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_auth_match:
-            provider = normalize_provider_name(provider_usage_auth_match.group(1))
             slot_id = provider_usage_auth_match.group(2)
             payload = self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_usage_auth_match.group(1))
                 session_key, organization_id, organization_name = self._parse_usage_auth_payload(payload)
                 result = self.hub.set_usage_auth(
                     provider,
@@ -4577,10 +4992,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_clear_match:
-            provider = normalize_provider_name(provider_usage_clear_match.group(1))
             slot_id = provider_usage_clear_match.group(2)
             self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_usage_clear_match.group(1))
                 result = self.hub.clear_usage_auth(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -4593,10 +5008,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_refresh_match:
-            provider = normalize_provider_name(provider_usage_refresh_match.group(1))
             slot_id = provider_usage_refresh_match.group(2)
             self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_usage_refresh_match.group(1))
                 result = self.hub.refresh_usage(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -4609,9 +5024,9 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_refresh_all_match:
-            provider = normalize_provider_name(provider_usage_refresh_all_match.group(1))
             self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_usage_refresh_all_match.group(1))
                 result = self.hub.refresh_all_usage(provider)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -4624,12 +5039,27 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_menu_bar_match:
-            provider = normalize_provider_name(provider_usage_menu_bar_match.group(1))
             slot_id = provider_usage_menu_bar_match.group(2)
             payload = self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_usage_menu_bar_match.group(1))
                 visible = self._parse_visible(payload)
                 result = self.hub.set_usage_menu_bar_visible(provider, slot_id, visible)
+            except AuthHubError as exc:
+                self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._send_json(result)
+            return
+
+        provider_usage_display_match = re.fullmatch(
+            r"/api/providers/([^/]+)/usage-display",
+            self.path,
+        )
+        if provider_usage_display_match:
+            payload = self._read_json_body()
+            try:
+                provider = normalize_provider_name(provider_usage_display_match.group(1))
+                result = self.hub.set_usage_display_preferences(provider, payload)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -4651,10 +5081,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
 
         provider_rename_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/rename", self.path)
         if provider_rename_match:
-            provider = normalize_provider_name(provider_rename_match.group(1))
             slot_id = provider_rename_match.group(2)
             payload = self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_rename_match.group(1))
                 label = self._parse_label(payload)
                 result = self.hub.rename_account(provider, slot_id, label)
             except AuthHubError as exc:
@@ -4677,10 +5107,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
 
         provider_capture_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/capture", self.path)
         if provider_capture_match:
-            provider = normalize_provider_name(provider_capture_match.group(1))
             slot_id = provider_capture_match.group(2)
             self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_capture_match.group(1))
                 payload = self.hub.save_current_to_account(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -4702,10 +5132,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
 
         provider_switch_match = re.fullmatch(r"/api/providers/([^/]+)/(?:accounts|slots)/([^/]+)/switch", self.path)
         if provider_switch_match:
-            provider = normalize_provider_name(provider_switch_match.group(1))
             slot_id = provider_switch_match.group(2)
             self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_switch_match.group(1))
                 payload = self.hub.switch(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
@@ -4730,10 +5160,10 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_clear_match:
-            provider = normalize_provider_name(provider_clear_match.group(1))
             slot_id = provider_clear_match.group(2)
             self._read_json_body()
             try:
+                provider = normalize_provider_name(provider_clear_match.group(1))
                 payload = self.hub.delete_account(provider, slot_id)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))

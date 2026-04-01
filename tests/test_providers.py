@@ -25,6 +25,7 @@ from codex_account_hub.providers import (
     CodexUsageFetchError,
     CodexUsageHub,
     SubprocessClaudeCodeBackend,
+    UnifiedAuthHub,
 )
 
 
@@ -518,6 +519,42 @@ class ClaudeCodeHubTests(unittest.TestCase):
         visibility = {slot["id"]: slot["usage_menu_bar_visible"] for slot in overview["accounts"]}
         self.assertEqual(visibility, {"account-1": True, "account-2": True})
 
+    def test_usage_display_preferences_preserve_order_and_style(self) -> None:
+        self.hub.create_account_from_current()
+        self.backend.payload = build_claude_payload("access-two", "refresh-two", subscription_type="max")
+        self.write_profile("two@example.com", "org-two", display_name="Two User")
+        self.hub.create_account_from_current()
+
+        self.usage_client.responses[("session-one", "org-usage-one")] = {
+            "five_hour_percent": 18.0,
+            "five_hour_reset_at": "2026-03-30T12:00:00Z",
+            "seven_day_percent": 35.0,
+            "seven_day_reset_at": "2026-04-02T12:00:00Z",
+        }
+        self.usage_client.responses[("session-two", "org-usage-two")] = {
+            "five_hour_percent": 52.0,
+            "five_hour_reset_at": "2026-03-30T13:00:00Z",
+            "seven_day_percent": 68.0,
+            "seven_day_reset_at": "2026-04-03T12:00:00Z",
+        }
+        self.hub.set_usage_auth("account-1", "session-one", "org-usage-one", "Main Org")
+        self.hub.set_usage_auth("account-2", "session-two", "org-usage-two", "Second Org")
+        self.hub.set_usage_display_preferences(
+            {
+                "selected_account_ids": ["account-2", "account-1"],
+                "icon_style": "double-rings",
+                "outline_style": "accent",
+            }
+        )
+
+        preferences = self.hub.load_usage_display_preferences()
+        overview = self.hub.overview()
+
+        self.assertEqual(preferences["selected_account_ids"], ["account-2", "account-1"])
+        self.assertEqual(preferences["icon_style"], "double-rings")
+        self.assertEqual(preferences["outline_style"], "accent")
+        self.assertEqual([slot["id"] for slot in overview["usage_menu_bar_accounts"]], ["account-2", "account-1"])
+
     def test_clear_usage_auth_removes_account_from_menu_bar_selection(self) -> None:
         self.hub.create_account_from_current()
         self.usage_client.responses[("session-one", "org-usage-one")] = {
@@ -921,12 +958,127 @@ class CodexUsageHubTests(unittest.TestCase):
             {"account-1": False, "account-2": True},
         )
 
+    def test_codex_usage_display_preferences_preserve_order_and_style(self) -> None:
+        self.write_active_auth(
+            "one@example.com",
+            "One",
+            "acct-one",
+            "plus",
+            access_token="access-one",
+        )
+        self.hub.create_account_from_current()
+
+        self.write_active_auth(
+            "two@example.com",
+            "Two",
+            "acct-two",
+            "plus",
+            access_token="access-two",
+        )
+        self.hub.create_account_from_current()
+
+        self.usage_client.responses["access-one"] = {
+            "five_hour_percent": 18.0,
+            "five_hour_reset_at": "2026-03-30T12:00:00Z",
+            "seven_day_percent": 35.0,
+            "seven_day_reset_at": "2026-04-02T12:00:00Z",
+            "code_review_seven_day_percent": 0.0,
+            "code_review_seven_day_reset_at": "2026-04-05T12:00:00Z",
+            "plan_type": "plus",
+            "email": "one@example.com",
+            "allowed": True,
+            "limit_reached": False,
+            "credits_balance": "0",
+            "credits_unlimited": False,
+        }
+        self.usage_client.responses["access-two"] = {
+            "five_hour_percent": 52.0,
+            "five_hour_reset_at": "2026-03-30T13:00:00Z",
+            "seven_day_percent": 68.0,
+            "seven_day_reset_at": "2026-04-03T12:00:00Z",
+            "code_review_seven_day_percent": 10.0,
+            "code_review_seven_day_reset_at": "2026-04-05T12:00:00Z",
+            "plan_type": "plus",
+            "email": "two@example.com",
+            "allowed": True,
+            "limit_reached": False,
+            "credits_balance": "0",
+            "credits_unlimited": False,
+        }
+        self.hub.refresh_usage("account-1")
+        self.hub.refresh_usage("account-2")
+        self.hub.set_usage_display_preferences(
+            {
+                "selected_account_ids": ["account-2", "account-1"],
+                "icon_style": "double-rings",
+                "outline_style": "neutral",
+            }
+        )
+
+        preferences = self.hub.load_usage_display_preferences()
+        overview = self.hub.overview()
+
+        self.assertEqual(preferences["selected_account_ids"], ["account-2", "account-1"])
+        self.assertEqual(preferences["icon_style"], "double-rings")
+        self.assertEqual(preferences["outline_style"], "neutral")
+        self.assertEqual([slot["id"] for slot in overview["usage_menu_bar_accounts"]], ["account-2", "account-1"])
+
 
 class SubprocessClaudeCodeBackendTests(unittest.TestCase):
     def test_resolve_claude_command_checks_common_homebrew_path(self) -> None:
         backend = SubprocessClaudeCodeBackend()
         with patch("codex_account_hub.providers.shutil.which", return_value="/opt/homebrew/bin/claude"):
             self.assertEqual(backend.resolve_claude_command(), "/opt/homebrew/bin/claude")
+
+
+class UnifiedAuthHubTests(unittest.TestCase):
+    def test_set_usage_display_preferences_returns_full_provider_overview(self) -> None:
+        class FakeProviderHub:
+            def __init__(self) -> None:
+                self.saved_payloads: list[dict] = []
+
+            def set_usage_display_preferences(self, payload: dict[str, object]) -> dict[str, object]:
+                self.saved_payloads.append(dict(payload))
+                return {"selected_account_ids": list(payload.get("selected_account_ids", []))}
+
+            def overview(self) -> dict[str, object]:
+                return {
+                    "current": {"exists": True},
+                    "saved_accounts": [],
+                    "usage_menu_bar_accounts": [],
+                    "usage_display_preferences": {
+                        "selected_account_ids": ["account-2", "account-1"],
+                        "icon_style": "double-rings",
+                        "outline_style": "neutral",
+                    },
+                }
+
+        codex_hub = FakeProviderHub()
+        claude_hub = FakeProviderHub()
+        hub = UnifiedAuthHub(codex_hub=codex_hub, claude_code_hub=claude_hub)
+
+        result = hub.set_usage_display_preferences(
+            "codex",
+            {
+                "selected_account_ids": ["account-2", "account-1"],
+                "icon_style": "double-rings",
+                "outline_style": "neutral",
+            },
+        )
+
+        self.assertEqual(
+            codex_hub.saved_payloads,
+            [
+                {
+                    "selected_account_ids": ["account-2", "account-1"],
+                    "icon_style": "double-rings",
+                    "outline_style": "neutral",
+                }
+            ],
+        )
+        self.assertEqual(result["provider_id"], "codex")
+        self.assertTrue(result["capabilities"]["usage_tracking"])
+        self.assertIn("usage_display_preferences", result)
 
 
 if __name__ == "__main__":

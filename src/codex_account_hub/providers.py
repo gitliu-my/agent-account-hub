@@ -51,6 +51,10 @@ CLAUDE_AI_API_BASE_URL = "https://claude.ai/api"
 CLAUDE_USAGE_STALE_SECONDS = 15 * 60
 CLAUDE_STATUSLINE_SCRIPT_NAME = "agent-account-hub-statusline.pl"
 CLAUDE_STATUSLINE_WRAPPER_NAME = "agent-account-hub-statusline.sh"
+USAGE_MENU_BAR_ICON_STYLE_OPTIONS = frozenset({"double-bars", "double-rings"})
+USAGE_MENU_BAR_OUTLINE_STYLE_OPTIONS = frozenset({"platform", "neutral", "accent"})
+DEFAULT_USAGE_MENU_BAR_ICON_STYLE = "double-bars"
+DEFAULT_USAGE_MENU_BAR_OUTLINE_STYLE = "platform"
 
 
 def current_claude_config_dir() -> Path:
@@ -288,6 +292,8 @@ def empty_claude_usage_display_preferences(path: str) -> dict[str, Any]:
     return {
         "path": path,
         "selected_account_ids": [],
+        "icon_style": DEFAULT_USAGE_MENU_BAR_ICON_STYLE,
+        "outline_style": DEFAULT_USAGE_MENU_BAR_OUTLINE_STYLE,
     }
 
 
@@ -790,11 +796,18 @@ def parse_cached_usage_percent(value: Any) -> float | None:
     return max(0.0, min(100.0, round(numeric, 1)))
 
 
-def normalize_usage_display_preferences(path: str, raw_ids: list[Any] | None) -> dict[str, Any]:
-    payload = {
-        "path": path,
-        "selected_account_ids": [],
-    }
+def normalize_usage_display_preferences(path: str, stored: dict[str, Any] | list[Any] | None) -> dict[str, Any]:
+    payload = empty_claude_usage_display_preferences(path)
+    if isinstance(stored, dict):
+        raw_ids = stored.get("selected_account_ids")
+        icon_style = str(stored.get("icon_style") or "").strip().lower()
+        outline_style = str(stored.get("outline_style") or "").strip().lower()
+        if icon_style in USAGE_MENU_BAR_ICON_STYLE_OPTIONS:
+            payload["icon_style"] = icon_style
+        if outline_style in USAGE_MENU_BAR_OUTLINE_STYLE_OPTIONS:
+            payload["outline_style"] = outline_style
+    else:
+        raw_ids = stored
     seen: set[str] = set()
     for value in raw_ids or []:
         account_id = str(value or "").strip()
@@ -940,17 +953,21 @@ class CodexUsageHub(AuthHub):
     def load_usage_display_preferences(self) -> dict[str, Any]:
         path = self.usage_display_preferences_path()
         if not path.is_file():
-            return normalize_usage_display_preferences(str(path), [])
+            return normalize_usage_display_preferences(str(path), None)
         try:
             stored = load_json_file(path)
         except (OSError, json.JSONDecodeError, AuthHubError):
-            return normalize_usage_display_preferences(str(path), [])
-        return normalize_usage_display_preferences(str(path), stored.get("selected_account_ids"))
+            return normalize_usage_display_preferences(str(path), None)
+        return normalize_usage_display_preferences(str(path), stored)
 
     def save_usage_display_preferences(self, payload: dict[str, Any]) -> None:
+        existing = self.load_usage_display_preferences()
         normalized = normalize_usage_display_preferences(
             str(self.usage_display_preferences_path()),
-            payload.get("selected_account_ids"),
+            {
+                **existing,
+                **(payload if isinstance(payload, dict) else {}),
+            },
         )
         atomic_write_json(self.usage_display_preferences_path(), normalized)
 
@@ -1066,7 +1083,12 @@ class CodexUsageHub(AuthHub):
         return [self.account_overview(account_id) for account_id in self.usage_menu_bar_selected_account_ids()]
 
     def _set_usage_menu_bar_selection(self, selected_ids: list[str]) -> None:
-        self.save_usage_display_preferences({"selected_account_ids": selected_ids})
+        preferences = self.load_usage_display_preferences()
+        self.save_usage_display_preferences({**preferences, "selected_account_ids": selected_ids})
+
+    def set_usage_display_preferences(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.save_usage_display_preferences(payload)
+        return self.overview()
 
     def remove_usage_menu_bar_account(self, account_id: str) -> None:
         preferences = self.load_usage_display_preferences()
@@ -1248,6 +1270,7 @@ class CodexUsageHub(AuthHub):
             "accounts": accounts,
             "slots": list(accounts),
             "usage_menu_bar_accounts": self.usage_menu_bar_accounts(),
+            "usage_display_preferences": self.load_usage_display_preferences(),
             "project_root": str(PROJECT_ROOT),
             "data_root": str(self.paths.data_root),
         }
@@ -1994,37 +2017,23 @@ class ClaudeCodeHub(BaseAccountHub):
 
     def load_usage_display_preferences(self) -> dict[str, Any]:
         path = self.usage_display_preferences_path()
-        payload = empty_claude_usage_display_preferences(str(path))
         if not path.is_file():
-            return payload
+            return empty_claude_usage_display_preferences(str(path))
         try:
             stored = load_json_file(path)
         except (OSError, json.JSONDecodeError, AuthHubError):
-            return payload
-        raw_ids = stored.get("selected_account_ids")
-        if isinstance(raw_ids, list):
-            seen: set[str] = set()
-            normalized_ids: list[str] = []
-            for value in raw_ids:
-                account_id = str(value or "").strip()
-                if not account_id or account_id in seen:
-                    continue
-                seen.add(account_id)
-                normalized_ids.append(account_id)
-            payload["selected_account_ids"] = normalized_ids
-        return payload
+            return empty_claude_usage_display_preferences(str(path))
+        return normalize_usage_display_preferences(str(path), stored)
 
     def save_usage_display_preferences(self, payload: dict[str, Any]) -> None:
-        normalized = empty_claude_usage_display_preferences(str(self.usage_display_preferences_path()))
-        seen: set[str] = set()
-        selected_ids: list[str] = []
-        for value in payload.get("selected_account_ids") or []:
-            account_id = str(value or "").strip()
-            if not account_id or account_id in seen:
-                continue
-            seen.add(account_id)
-            selected_ids.append(account_id)
-        normalized["selected_account_ids"] = selected_ids
+        existing = self.load_usage_display_preferences()
+        normalized = normalize_usage_display_preferences(
+            str(self.usage_display_preferences_path()),
+            {
+                **existing,
+                **(payload if isinstance(payload, dict) else {}),
+            },
+        )
         atomic_write_json(self.usage_display_preferences_path(), normalized)
 
     def usage_menu_bar_eligible(
@@ -2074,7 +2083,12 @@ class ClaudeCodeHub(BaseAccountHub):
         return [self.account_overview(account_id) for account_id in self.usage_menu_bar_selected_account_ids()]
 
     def _set_usage_menu_bar_selection(self, selected_ids: list[str]) -> None:
-        self.save_usage_display_preferences({"selected_account_ids": selected_ids})
+        preferences = self.load_usage_display_preferences()
+        self.save_usage_display_preferences({**preferences, "selected_account_ids": selected_ids})
+
+    def set_usage_display_preferences(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.save_usage_display_preferences(payload)
+        return self.overview()
 
     def remove_usage_menu_bar_account(self, account_id: str) -> None:
         preferences = self.load_usage_display_preferences()
@@ -2363,6 +2377,7 @@ class ClaudeCodeHub(BaseAccountHub):
             "accounts": accounts,
             "slots": list(accounts),
             "usage_menu_bar_accounts": self.usage_menu_bar_accounts(),
+            "usage_display_preferences": self.load_usage_display_preferences(),
             "statusline": self.statusline_overview(current=current),
             "project_root": str(PROJECT_ROOT),
             "data_root": str(self.paths.data_root),
@@ -2632,6 +2647,14 @@ class UnifiedAuthHub:
         if update is None:
             raise AuthHubError(f"provider {provider} does not support menu bar usage selection")
         return update(account_id, visible)
+
+    def set_usage_display_preferences(self, provider: str, payload: dict[str, Any]) -> dict[str, Any]:
+        hub = self.provider_hub(provider)
+        update = getattr(hub, "set_usage_display_preferences", None)
+        if update is None:
+            raise AuthHubError(f"provider {provider} does not support menu bar usage preferences")
+        update(payload)
+        return self.provider_overview(provider)
 
     def set_statusline_preferences(self, provider: str, payload: dict[str, Any]) -> dict[str, Any]:
         hub = self.provider_hub(provider)
