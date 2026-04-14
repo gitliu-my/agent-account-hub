@@ -2933,6 +2933,13 @@ INDEX_HTML = """<!doctype html>
           detail: (usage.error || "用量接口暂时限制请求频率") + usageRetryDetail(usage)
         };
       }
+      if (usage.status === "proxy_unavailable") {
+        return {
+          label: "代理未就绪",
+          tone: "warn",
+          detail: (usage.error || "未检测到代理环境，当前已跳过外网请求") + usageRetryDetail(usage)
+        };
+      }
       if (usage.status === "stale") {
         return {
           label: "缓存已过期",
@@ -2960,11 +2967,11 @@ INDEX_HTML = """<!doctype html>
       }
       if (usage.status === "not_configured") {
         return {
-          label: "未配置用量",
+          label: usageSupportsManualAuthConfig() ? "未配置用量" : "待获取用量",
           tone: "muted",
           detail: usageSupportsManualAuthConfig()
             ? "请先为这个账号保存 claude.ai 的 sessionKey 和 organizationId"
-            : "这个账号还没有可用的 Codex 用量缓存"
+            : "这个账号可以直接查询 Codex 用量；首次刷新成功后就会显示 5h / 7d 数据"
         };
       }
       return {
@@ -3621,6 +3628,9 @@ INDEX_HTML = """<!doctype html>
       if (usage.status === "rate_limited") {
         return "当前在退避窗口内，稍后再试";
       }
+      if (usage.status === "proxy_unavailable") {
+        return "当前未检测到代理环境";
+      }
       return "先成功获取一次有效用量";
     }
 
@@ -3973,7 +3983,7 @@ INDEX_HTML = """<!doctype html>
           <section class="module-card">
             <div class="module-head">
               <div class="module-copy">
-                ${titledModuleTitle("可选账号", "这里只列出当前可以加入菜单栏展示的账号。用量异常或认证缺失的账号不会出现在这里。")}
+                ${titledModuleTitle("可选账号", "这里只列出当前可以加入菜单栏展示的账号。对 Codex 来说，只要这条快照里有可用 access token，就可以先加入，首次刷新成功后再显示真实用量。")}
               </div>
             </div>
             <div class="selection-stack">
@@ -4317,7 +4327,7 @@ INDEX_HTML = """<!doctype html>
     async function refreshUsage(slotId) {
       await request(providerActionPath("/accounts/" + encodeSlotId(slotId) + "/usage/refresh"), {
         method: "POST",
-        body: "{}"
+        body: JSON.stringify({ force: true })
       });
       flash("已刷新这个账号的用量");
       await refreshState({ quiet: true });
@@ -4451,7 +4461,7 @@ INDEX_HTML = """<!doctype html>
       usageRefreshPromises[provider] = (async () => {
         await request("/api/providers/" + encodeURIComponent(provider) + "/usage/refresh-all", {
           method: "POST",
-          body: "{}"
+          body: JSON.stringify({ force: !auto })
         });
         if (!quiet && !auto && provider === selectedProvider) {
           flash("已刷新当前平台下已配置账号的用量");
@@ -5009,10 +5019,11 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
         )
         if provider_usage_refresh_match:
             slot_id = provider_usage_refresh_match.group(2)
-            self._read_json_body()
+            payload = self._read_json_body()
             try:
                 provider = normalize_provider_name(provider_usage_refresh_match.group(1))
-                result = self.hub.refresh_usage(provider, slot_id)
+                force = self._parse_force(payload)
+                result = self.hub.refresh_usage(provider, slot_id, force=force)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -5024,10 +5035,11 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             self.path,
         )
         if provider_usage_refresh_all_match:
-            self._read_json_body()
+            payload = self._read_json_body()
             try:
                 provider = normalize_provider_name(provider_usage_refresh_all_match.group(1))
-                result = self.hub.refresh_all_usage(provider)
+                force = self._parse_force(payload)
+                result = self.hub.refresh_all_usage(provider, force=force)
             except AuthHubError as exc:
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
@@ -5213,6 +5225,22 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
             if normalized in {"0", "false", "no", "off"}:
                 return False
         raise AuthHubError("visible must be a boolean")
+
+    def _parse_force(self, payload: dict[str, Any]) -> bool:
+        force = payload.get("force")
+        if force is None:
+            return False
+        if isinstance(force, bool):
+            return force
+        if isinstance(force, (int, float)):
+            return bool(force)
+        if isinstance(force, str):
+            normalized = force.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off", ""}:
+                return False
+        raise AuthHubError("force must be a boolean")
 
     def _parse_usage_auth_payload(self, payload: dict[str, Any]) -> tuple[str, str, str | None]:
         session_key = payload.get("session_key")

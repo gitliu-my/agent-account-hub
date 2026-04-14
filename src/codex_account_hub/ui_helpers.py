@@ -102,6 +102,8 @@ def usage_status_label(usage: dict[str, Any], usage_auth: dict[str, Any] | None 
         return "认证失效"
     if status == "rate_limited":
         return "请求受限"
+    if status == "proxy_unavailable":
+        return "代理未就绪"
     if status == "auth_missing":
         return "缺少凭据"
     if status == "error":

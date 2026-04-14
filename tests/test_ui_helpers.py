@@ -89,6 +89,28 @@ class UiHelpersTests(unittest.TestCase):
         )
         self.assertEqual(row["usage"], "认证失效")
 
+    def test_slot_table_row_uses_proxy_unavailable_status_label(self) -> None:
+        row = slot_table_row(
+            {
+                "id": "account-1",
+                "label": "Claude 主号",
+                "active": False,
+                "snapshot": {
+                    "exists": True,
+                    "email": "test@example.com",
+                    "name": "Six",
+                    "plan_type": "max",
+                },
+                "usage": {
+                    "status": "proxy_unavailable",
+                },
+                "usage_auth": {
+                    "configured": True,
+                },
+            }
+        )
+        self.assertEqual(row["usage"], "代理未就绪")
+
 
 if __name__ == "__main__":
     unittest.main()

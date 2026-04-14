@@ -111,6 +111,23 @@ class TrayHelpersTests(unittest.TestCase):
     def test_usage_progress_tone_keeps_zero_percent_green_even_if_stale(self) -> None:
         self.assertEqual(usage_progress_tone(0, status="stale"), "good")
 
+    def test_usage_progress_tone_marks_proxy_unavailable_as_warn_without_percent(self) -> None:
+        self.assertEqual(usage_progress_tone(None, status="proxy_unavailable"), "warn")
+
+    def test_status_item_usage_title_uses_pause_marker_for_proxy_unavailable(self) -> None:
+        overview = {
+            "current": {
+                "usage": {
+                    "status": "proxy_unavailable",
+                },
+                "usage_auth": {
+                    "configured": True,
+                },
+            },
+            "accounts": [],
+        }
+        self.assertEqual(status_item_usage_title(overview), "⏸")
+
 
 if __name__ == "__main__":
     unittest.main()

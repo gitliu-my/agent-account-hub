@@ -80,6 +80,8 @@ def usage_progress_tone(percent: Any, status: str | None = None) -> str:
     try:
         numeric = float(percent)
     except (TypeError, ValueError):
+        if status == "proxy_unavailable":
+            return "warn"
         return "warn" if status == "stale" else "muted"
     if numeric >= 80:
         return "bad"
@@ -128,7 +130,11 @@ def status_item_usage_title(overview: dict[str, Any]) -> str:
     seven_day = format_menu_usage_value(usage.get("seven_day_percent"))
     if five_hour == "—" and seven_day == "—":
         status = str(usage.get("status") or "")
-        return "!" if status in {"unauthorized", "error", "auth_missing"} else "··"
+        if status in {"unauthorized", "error", "auth_missing"}:
+            return "!"
+        if status == "proxy_unavailable":
+            return "⏸"
+        return "··"
     return f"{five_hour}·{seven_day}"
 
 
@@ -158,7 +164,7 @@ def _slot_frame_stroke_color(provider_id: str | None, outline_style: str = DEFAU
     if AppKit is None:
         return None
     if outline_style == "neutral":
-        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.38)
+        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.54)
     if outline_style == "accent":
         if provider_id == "claude-code":
             return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.98)
@@ -168,26 +174,26 @@ def _slot_frame_stroke_color(provider_id: str | None, outline_style: str = DEFAU
     if provider_id == "claude-code":
         return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.9)
     if provider_id == "codex":
-        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.52)
-    return AppKit.NSColor.separatorColor().colorWithAlphaComponent_(0.35)
+        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.68)
+    return AppKit.NSColor.separatorColor().colorWithAlphaComponent_(0.5)
 
 
 def _slot_frame_fill_color(provider_id: str | None, outline_style: str = DEFAULT_MENU_BAR_OUTLINE_STYLE) -> Any:
     if AppKit is None:
         return None
     if outline_style == "neutral":
-        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.06)
+        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.14)
     if outline_style == "accent":
         if provider_id == "claude-code":
-            return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.16)
+            return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.22)
         if provider_id == "codex":
-            return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.14)
-        return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.1)
+            return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.2)
+        return AppKit.NSColor.controlAccentColor().colorWithAlphaComponent_(0.16)
     if provider_id == "claude-code":
-        return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.12)
+        return AppKit.NSColor.systemOrangeColor().colorWithAlphaComponent_(0.2)
     if provider_id == "codex":
-        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.08)
-    return AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.22)
+        return AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.18)
+    return AppKit.NSColor.windowBackgroundColor().colorWithAlphaComponent_(0.3)
 
 
 def _slot_active_indicator_color(provider_id: str | None, outline_style: str = DEFAULT_MENU_BAR_OUTLINE_STYLE) -> Any:
@@ -212,7 +218,7 @@ def _draw_progress_ring(rect: Any, percent: Any, status: str, tone: str) -> None
     if AppKit is None or Foundation is None:
         return
     track = AppKit.NSBezierPath.bezierPathWithOvalInRect_(rect)
-    AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.24).setStroke()
+    AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.38).setStroke()
     track.setLineWidth_(1.8)
     track.stroke()
 
@@ -324,7 +330,7 @@ def build_usage_status_icon_for_slots(slots: list[dict[str, Any]]) -> Any | None
                 (bottom_track, usage.get("seven_day_percent")),
             ):
                 track_path = AppKit.NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(rect, 2.0, 2.0)
-                AppKit.NSColor.tertiaryLabelColor().colorWithAlphaComponent_(0.26).setFill()
+                AppKit.NSColor.labelColor().colorWithAlphaComponent_(0.34).setFill()
                 track_path.fill()
 
                 tone = usage_progress_tone(percent, status=status)

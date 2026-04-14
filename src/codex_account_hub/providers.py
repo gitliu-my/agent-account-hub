@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -49,12 +50,48 @@ DEFAULT_CLAUDE_CONFIG_DIR = Path.home() / ".claude"
 DEFAULT_CLAUDE_USAGE_SESSION_KEYCHAIN_SERVICE = "Agent Account Hub-claude.ai-session"
 CLAUDE_AI_API_BASE_URL = "https://claude.ai/api"
 CLAUDE_USAGE_STALE_SECONDS = 15 * 60
+PROXY_GUARD_CACHE_SECONDS = 15.0
+PROXY_GUARD_BACKOFF_SECONDS = 60
+PROXY_REMOTE_PROBE_URL = "https://www.gstatic.com/generate_204"
+PROXY_REMOTE_PROBE_TIMEOUT_SECONDS = 2.0
+PROXY_REMOTE_PROBE_SUCCESS_CACHE_SECONDS = 5 * 60.0
+PROXY_REMOTE_PROBE_FAILURE_CACHE_SECONDS = 60.0
+PROXY_ENV_KEYS = (
+    "ALL_PROXY",
+    "all_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "HTTP_PROXY",
+    "http_proxy",
+)
+PROXY_SYSTEM_ENABLE_MARKERS = (
+    "HTTPEnable : 1",
+    "HTTPSEnable : 1",
+    "SOCKSEnable : 1",
+    "ProxyAutoConfigEnable : 1",
+)
+PROXY_PROCESS_MARKERS = (
+    "verge-mihomo",
+    "mihomo",
+    "sing-box",
+    "singbox",
+    "v2ray",
+    "xray",
+    "clash-meta",
+)
 CLAUDE_STATUSLINE_SCRIPT_NAME = "agent-account-hub-statusline.pl"
 CLAUDE_STATUSLINE_WRAPPER_NAME = "agent-account-hub-statusline.sh"
 USAGE_MENU_BAR_ICON_STYLE_OPTIONS = frozenset({"double-bars", "double-rings"})
 USAGE_MENU_BAR_OUTLINE_STYLE_OPTIONS = frozenset({"platform", "neutral", "accent"})
 DEFAULT_USAGE_MENU_BAR_ICON_STYLE = "double-bars"
 DEFAULT_USAGE_MENU_BAR_OUTLINE_STYLE = "platform"
+
+
+@dataclass(frozen=True)
+class ProxyEnvironmentStatus:
+    ready: bool
+    source: str | None
+    detail: str
 
 
 def current_claude_config_dir() -> Path:
@@ -132,6 +169,166 @@ def run_subprocess(args: list[str], timeout: float = 30.0) -> subprocess.Complet
         raise AuthHubError(f"command timed out after {timeout}s: {' '.join(args)}") from exc
     except OSError as exc:
         raise AuthHubError(f"failed to run {' '.join(args)}: {exc}") from exc
+
+
+class ProxyEnvironmentGuard:
+    def __init__(
+        self,
+        *,
+        cache_seconds: float = PROXY_GUARD_CACHE_SECONDS,
+        remote_probe_url: str = PROXY_REMOTE_PROBE_URL,
+        remote_probe_timeout_seconds: float = PROXY_REMOTE_PROBE_TIMEOUT_SECONDS,
+        remote_probe_success_cache_seconds: float = PROXY_REMOTE_PROBE_SUCCESS_CACHE_SECONDS,
+        remote_probe_failure_cache_seconds: float = PROXY_REMOTE_PROBE_FAILURE_CACHE_SECONDS,
+        remote_probe_enabled: bool = True,
+        env: dict[str, str] | None = None,
+        platform: str | None = None,
+        subprocess_runner: Any | None = None,
+        opener: Any | None = None,
+        socket_paths: tuple[Path, ...] | None = None,
+    ) -> None:
+        self.cache_seconds = max(0.0, float(cache_seconds))
+        self.remote_probe_url = str(remote_probe_url).strip()
+        self.remote_probe_timeout_seconds = max(0.1, float(remote_probe_timeout_seconds))
+        self.remote_probe_success_cache_seconds = max(0.0, float(remote_probe_success_cache_seconds))
+        self.remote_probe_failure_cache_seconds = max(0.0, float(remote_probe_failure_cache_seconds))
+        self.remote_probe_enabled = bool(remote_probe_enabled and self.remote_probe_url)
+        self.env = env if env is not None else os.environ
+        self.platform = platform or sys.platform
+        self.subprocess_runner = subprocess_runner or run_subprocess
+        self.opener = opener or urlopen
+        self.socket_paths = socket_paths if socket_paths is not None else (Path("/tmp/verge/verge-mihomo.sock"),)
+        self._local_cached_status: ProxyEnvironmentStatus | None = None
+        self._local_cached_at: datetime | None = None
+        self._probe_cached_status: ProxyEnvironmentStatus | None = None
+        self._probe_cached_at: datetime | None = None
+        self._probe_cached_ttl_seconds: float = 0.0
+
+    def current_status(self, *, force: bool = False) -> ProxyEnvironmentStatus:
+        local_status = self._local_status(force=force)
+        if not local_status.ready or not self.remote_probe_enabled:
+            return local_status
+        return self._remote_probe_status(local_status, force=force)
+
+    def _local_status(self, *, force: bool = False) -> ProxyEnvironmentStatus:
+        now = datetime.now(timezone.utc)
+        if (
+            not force
+            and self._local_cached_status is not None
+            and self._local_cached_at is not None
+            and (now - self._local_cached_at).total_seconds() < self.cache_seconds
+        ):
+            return self._local_cached_status
+
+        status = (
+            self._detect_env_proxy()
+            or self._detect_system_proxy()
+            or self._detect_proxy_process()
+            or ProxyEnvironmentStatus(
+                ready=False,
+                source=None,
+                detail="未检测到代理环境，已跳过外网请求",
+            )
+        )
+        self._local_cached_status = status
+        self._local_cached_at = now
+        return status
+
+    def _remote_probe_status(
+        self,
+        local_status: ProxyEnvironmentStatus,
+        *,
+        force: bool = False,
+    ) -> ProxyEnvironmentStatus:
+        now = datetime.now(timezone.utc)
+        if (
+            not force
+            and self._probe_cached_status is not None
+            and self._probe_cached_at is not None
+            and (now - self._probe_cached_at).total_seconds() < self._probe_cached_ttl_seconds
+        ):
+            return self._probe_cached_status
+
+        request = Request(
+            self.remote_probe_url,
+            headers={
+                "Accept": "*/*",
+                "User-Agent": "Agent Account Hub Probe",
+                "Cache-Control": "no-cache",
+            },
+            method="GET",
+        )
+        try:
+            with self.opener(request, timeout=self.remote_probe_timeout_seconds) as response:
+                status_code = int(getattr(response, "status", 200) or 200)
+                status = ProxyEnvironmentStatus(
+                    ready=True,
+                    source=local_status.source,
+                    detail=f"{local_status.detail}；远端探针已通过（HTTP {status_code}）",
+                )
+                ttl_seconds = self.remote_probe_success_cache_seconds
+        except HTTPError as exc:
+            status = ProxyEnvironmentStatus(
+                ready=True,
+                source=local_status.source,
+                detail=f"{local_status.detail}；远端探针可达（HTTP {exc.code}）",
+            )
+            ttl_seconds = self.remote_probe_success_cache_seconds
+        except URLError as exc:
+            status = ProxyEnvironmentStatus(
+                ready=False,
+                source="probe",
+                detail=f"检测到代理环境，但远端探针未通过：{exc.reason}；已跳过外网请求",
+            )
+            ttl_seconds = self.remote_probe_failure_cache_seconds
+        except OSError as exc:
+            status = ProxyEnvironmentStatus(
+                ready=False,
+                source="probe",
+                detail=f"检测到代理环境，但远端探针未通过：{exc}；已跳过外网请求",
+            )
+            ttl_seconds = self.remote_probe_failure_cache_seconds
+
+        self._probe_cached_status = status
+        self._probe_cached_at = now
+        self._probe_cached_ttl_seconds = ttl_seconds
+        return status
+
+    def _detect_env_proxy(self) -> ProxyEnvironmentStatus | None:
+        for key in PROXY_ENV_KEYS:
+            value = str(self.env.get(key) or "").strip()
+            if value:
+                return ProxyEnvironmentStatus(True, "env", f"检测到环境变量 {key}")
+        return None
+
+    def _detect_system_proxy(self) -> ProxyEnvironmentStatus | None:
+        if self.platform != "darwin":
+            return None
+        output = self._command_output(["/usr/sbin/scutil", "--proxy"], timeout=5.0)
+        if not output:
+            return None
+        if any(marker in output for marker in PROXY_SYSTEM_ENABLE_MARKERS):
+            return ProxyEnvironmentStatus(True, "system", "检测到系统代理配置")
+        return None
+
+    def _detect_proxy_process(self) -> ProxyEnvironmentStatus | None:
+        if any(path.exists() for path in self.socket_paths):
+            return ProxyEnvironmentStatus(True, "runtime", "检测到 Clash Verge Mihomo 运行中")
+
+        output = self._command_output(["ps", "aux"], timeout=5.0).lower()
+        if not output:
+            return None
+        for marker in PROXY_PROCESS_MARKERS:
+            if marker in output:
+                return ProxyEnvironmentStatus(True, "runtime", f"检测到本地代理核心进程：{marker}")
+        return None
+
+    def _command_output(self, args: list[str], *, timeout: float) -> str:
+        try:
+            result = self.subprocess_runner(args, timeout=timeout)
+        except AuthHubError:
+            return ""
+        return str(result.stdout or "")
 
 
 def default_claude_code_data_root() -> Path:
@@ -866,17 +1063,33 @@ class CodexUsageClient:
 
 
 class ChatGPTWhamUsageClient(CodexUsageClient):
-    def __init__(self, url: str = CODEX_USAGE_API_URL, timeout_seconds: float = 20.0) -> None:
+    def __init__(
+        self,
+        url: str = CODEX_USAGE_API_URL,
+        timeout_seconds: float = 20.0,
+        proxy_guard: ProxyEnvironmentGuard | None = None,
+    ) -> None:
         self.url = url
         self.timeout_seconds = timeout_seconds
+        self.proxy_guard = proxy_guard or ProxyEnvironmentGuard()
 
     def fetch_usage(self, access_token: str) -> dict[str, Any]:
+        proxy_status = self.proxy_guard.current_status()
+        if not proxy_status.ready:
+            raise CodexUsageFetchError(
+                "proxy_unavailable",
+                f"{proxy_status.detail}；恢复代理后会自动继续刷新 Codex 用量",
+            )
         request = Request(
             self.url,
             headers={
                 "Authorization": f"Bearer {access_token}",
                 "Accept": "application/json",
-                "User-Agent": "Agent Account Hub",
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://chatgpt.com/codex/settings/usage",
+                "Origin": "https://chatgpt.com",
+                "x-openai-target-path": "/backend-api/wham/usage",
+                "x-openai-target-route": "/backend-api/wham/usage",
             },
             method="GET",
         )
@@ -1055,9 +1268,12 @@ class CodexUsageHub(AuthHub):
         cache = usage or self.saved_usage_cache(account_id)
         if not auth.get("configured"):
             return False
-        if str(cache.get("status") or "") not in {"ok", "stale"}:
+        status = str(cache.get("status") or "")
+        if status in {"auth_missing", "unauthorized"}:
             return False
-        return any(cache.get(key) is not None for key in ("five_hour_percent", "seven_day_percent"))
+        if status in {"ok", "stale"}:
+            return any(cache.get(key) is not None for key in ("five_hour_percent", "seven_day_percent"))
+        return True
 
     def usage_menu_bar_selected_account_ids(self) -> list[str]:
         preferences = self.load_usage_display_preferences()
@@ -1103,7 +1319,7 @@ class CodexUsageHub(AuthHub):
         if visible:
             account = self.account_overview(account_id)
             if not account.get("usage_menu_bar_eligible"):
-                raise AuthHubError("只有已成功获取到 Codex 用量的账号才能显示到菜单栏")
+                raise AuthHubError("只有保存了可用 access token 的 Codex 账号才能显示到菜单栏")
             if account_id not in selected_ids:
                 selected_ids.append(account_id)
         else:
@@ -1114,7 +1330,7 @@ class CodexUsageHub(AuthHub):
     def _future_iso(self, seconds: int) -> str:
         return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).replace(microsecond=0).isoformat()
 
-    def refresh_usage(self, account_id: str) -> dict[str, Any]:
+    def refresh_usage(self, account_id: str, *, force: bool = False) -> dict[str, Any]:
         self.get_account(account_id)
         now = utc_now_iso()
         auth = self.saved_usage_auth(account_id)
@@ -1148,7 +1364,7 @@ class CodexUsageHub(AuthHub):
             return self.account_overview(account_id)
 
         next_refresh = parse_iso_datetime(previous_cache.get("next_refresh_at"))
-        if next_refresh is not None and next_refresh > datetime.now(timezone.utc):
+        if not force and next_refresh is not None and next_refresh > datetime.now(timezone.utc):
             return self.account_overview(account_id)
 
         auth_payload = load_json_file(self.account_auth_path(account_id))
@@ -1190,9 +1406,10 @@ class CodexUsageHub(AuthHub):
             backoff_seconds = {
                 "unauthorized": CODEX_USAGE_UNAUTHORIZED_BACKOFF_SECONDS,
                 "rate_limited": CODEX_USAGE_RATE_LIMIT_BACKOFF_SECONDS,
+                "proxy_unavailable": PROXY_GUARD_BACKOFF_SECONDS,
             }.get(exc.kind, CODEX_USAGE_ERROR_BACKOFF_SECONDS)
             status = exc.kind
-            if status not in {"unauthorized", "rate_limited", "invalid_response"} and has_prior_data:
+            if status not in {"unauthorized", "rate_limited", "invalid_response", "proxy_unavailable"} and has_prior_data:
                 status = "stale"
             if status == "invalid_response":
                 status = "error"
@@ -1227,12 +1444,12 @@ class CodexUsageHub(AuthHub):
         )
         return self.account_overview(account_id)
 
-    def refresh_all_usage(self) -> dict[str, Any]:
+    def refresh_all_usage(self, *, force: bool = False) -> dict[str, Any]:
         for account in self.load_state()["accounts"]:
             account_id = str(account["id"])
             auth = self.saved_usage_auth(account_id)
             if auth.get("configured"):
-                self.refresh_usage(account_id)
+                self.refresh_usage(account_id, force=force)
         return self.overview()
 
     def current_overview(self, sync_result: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1424,11 +1641,23 @@ class ClaudeUsageClient:
 
 
 class ClaudeAiWebUsageClient(ClaudeUsageClient):
-    def __init__(self, base_url: str = CLAUDE_AI_API_BASE_URL, timeout_seconds: float = 20.0) -> None:
+    def __init__(
+        self,
+        base_url: str = CLAUDE_AI_API_BASE_URL,
+        timeout_seconds: float = 20.0,
+        proxy_guard: ProxyEnvironmentGuard | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.proxy_guard = proxy_guard or ProxyEnvironmentGuard()
 
     def fetch_usage(self, session_key: str, organization_id: str) -> dict[str, Any]:
+        proxy_status = self.proxy_guard.current_status()
+        if not proxy_status.ready:
+            raise ClaudeUsageFetchError(
+                "proxy_unavailable",
+                f"{proxy_status.detail}；恢复代理后会自动继续刷新 claude.ai 用量",
+            )
         url = f"{self.base_url}/organizations/{quote(organization_id, safe='')}/usage"
         request = Request(
             url,
@@ -2048,7 +2277,7 @@ class ClaudeCodeHub(BaseAccountHub):
         if not auth.get("configured"):
             return False
         status = str(cache.get("status") or "")
-        if status not in {"ok", "stale"}:
+        if status not in {"ok", "stale", "proxy_unavailable"}:
             return False
         return any(
             cache.get(key) is not None
@@ -2176,7 +2405,7 @@ class ClaudeCodeHub(BaseAccountHub):
         self.remove_usage_menu_bar_account(account_id)
         return self.account_overview(account_id)
 
-    def refresh_usage(self, account_id: str) -> dict[str, Any]:
+    def refresh_usage(self, account_id: str, *, force: bool = False) -> dict[str, Any]:
         self.get_account(account_id)
         now = utc_now_iso()
         auth = self.saved_usage_auth(account_id)
@@ -2232,7 +2461,7 @@ class ClaudeCodeHub(BaseAccountHub):
                 )
             )
             status = exc.kind
-            if status not in {"unauthorized", "invalid_response"} and has_prior_data:
+            if status not in {"unauthorized", "invalid_response", "proxy_unavailable"} and has_prior_data:
                 status = "stale"
             if status == "invalid_response":
                 status = "error"
@@ -2267,12 +2496,12 @@ class ClaudeCodeHub(BaseAccountHub):
         )
         return self.account_overview(account_id)
 
-    def refresh_all_usage(self) -> dict[str, Any]:
+    def refresh_all_usage(self, *, force: bool = False) -> dict[str, Any]:
         for account in self.load_state()["accounts"]:
             account_id = str(account["id"])
             auth = self.saved_usage_auth(account_id)
             if auth.get("status") in {"ready", "auth_missing"} or auth.get("organization_id"):
-                self.refresh_usage(account_id)
+                self.refresh_usage(account_id, force=force)
         return self.overview()
 
     def current_summary(self) -> dict[str, Any]:
@@ -2627,19 +2856,19 @@ class UnifiedAuthHub:
             raise AuthHubError(f"provider {provider} does not support usage tracking")
         return clear(account_id)
 
-    def refresh_usage(self, provider: str, account_id: str) -> dict[str, Any]:
+    def refresh_usage(self, provider: str, account_id: str, *, force: bool = False) -> dict[str, Any]:
         hub = self.provider_hub(provider)
         refresh = getattr(hub, "refresh_usage", None)
         if refresh is None:
             raise AuthHubError(f"provider {provider} does not support usage tracking")
-        return refresh(account_id)
+        return refresh(account_id, force=force)
 
-    def refresh_all_usage(self, provider: str) -> dict[str, Any]:
+    def refresh_all_usage(self, provider: str, *, force: bool = False) -> dict[str, Any]:
         hub = self.provider_hub(provider)
         refresh = getattr(hub, "refresh_all_usage", None)
         if refresh is None:
             raise AuthHubError(f"provider {provider} does not support usage tracking")
-        return refresh()
+        return refresh(force=force)
 
     def set_usage_menu_bar_visible(self, provider: str, account_id: str, visible: bool) -> dict[str, Any]:
         hub = self.provider_hub(provider)

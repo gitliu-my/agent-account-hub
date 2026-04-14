@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.error import URLError
 from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +16,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from codex_account_hub.core import AuthHubPaths
 from codex_account_hub.providers import (
+    ChatGPTWhamUsageClient,
+    ClaudeAiWebUsageClient,
     ClaudeCodeBackend,
     ClaudeCodeHub,
     ClaudeCodeHubPaths,
@@ -24,6 +27,7 @@ from codex_account_hub.providers import (
     CodexUsageClient,
     CodexUsageFetchError,
     CodexUsageHub,
+    ProxyEnvironmentGuard,
     SubprocessClaudeCodeBackend,
     UnifiedAuthHub,
 )
@@ -190,6 +194,133 @@ class FakeCodexUsageClient(CodexUsageClient):
         if access_token in self.errors:
             raise self.errors[access_token]
         return copy.deepcopy(self.responses[access_token])
+
+
+class ProxyGuardTests(unittest.TestCase):
+    def test_proxy_guard_detects_mihomo_runtime_without_system_proxy(self) -> None:
+        def fake_runner(args: list[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
+            if args == ["/usr/sbin/scutil", "--proxy"]:
+                return subprocess.CompletedProcess(args, 0, stdout="<dictionary> { HTTPEnable : 0 }", stderr="")
+            if args == ["ps", "aux"]:
+                return subprocess.CompletedProcess(args, 0, stdout="root 1 0 0 verge-mihomo -d /tmp/verge\n", stderr="")
+            raise AssertionError(f"unexpected command: {args}")
+
+        guard = ProxyEnvironmentGuard(
+            env={},
+            platform="darwin",
+            subprocess_runner=fake_runner,
+            cache_seconds=0,
+            remote_probe_enabled=False,
+            socket_paths=(),
+        )
+
+        status = guard.current_status()
+
+        self.assertTrue(status.ready)
+        self.assertEqual(status.source, "runtime")
+        self.assertIn("mihomo", status.detail.lower())
+
+    def test_chatgpt_usage_client_skips_network_when_proxy_unavailable(self) -> None:
+        def fake_runner(args: list[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
+            if args == ["/usr/sbin/scutil", "--proxy"]:
+                return subprocess.CompletedProcess(args, 0, stdout="<dictionary> { HTTPEnable : 0 }", stderr="")
+            if args == ["ps", "aux"]:
+                return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+            raise AssertionError(f"unexpected command: {args}")
+
+        client = ChatGPTWhamUsageClient(
+            proxy_guard=ProxyEnvironmentGuard(
+                env={},
+                platform="darwin",
+                subprocess_runner=fake_runner,
+                cache_seconds=0,
+                socket_paths=(),
+            )
+        )
+
+        with self.assertRaises(CodexUsageFetchError) as ctx:
+            client.fetch_usage("access-token")
+
+        self.assertEqual(ctx.exception.kind, "proxy_unavailable")
+        self.assertIn("代理", str(ctx.exception))
+
+    def test_claude_usage_client_skips_network_when_proxy_unavailable(self) -> None:
+        def fake_runner(args: list[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
+            if args == ["/usr/sbin/scutil", "--proxy"]:
+                return subprocess.CompletedProcess(args, 0, stdout="<dictionary> { HTTPEnable : 0 }", stderr="")
+            if args == ["ps", "aux"]:
+                return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+            raise AssertionError(f"unexpected command: {args}")
+
+        client = ClaudeAiWebUsageClient(
+            proxy_guard=ProxyEnvironmentGuard(
+                env={},
+                platform="darwin",
+                subprocess_runner=fake_runner,
+                cache_seconds=0,
+                socket_paths=(),
+            )
+        )
+
+        with self.assertRaises(ClaudeUsageFetchError) as ctx:
+            client.fetch_usage("session-key", "org-id")
+
+        self.assertEqual(ctx.exception.kind, "proxy_unavailable")
+        self.assertIn("代理", str(ctx.exception))
+
+    def test_proxy_guard_blocks_when_runtime_exists_but_remote_probe_fails(self) -> None:
+        def fake_runner(args: list[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
+            if args == ["/usr/sbin/scutil", "--proxy"]:
+                return subprocess.CompletedProcess(args, 0, stdout="<dictionary> { HTTPEnable : 0 }", stderr="")
+            if args == ["ps", "aux"]:
+                return subprocess.CompletedProcess(args, 0, stdout="root 1 0 0 verge-mihomo -d /tmp/verge\n", stderr="")
+            raise AssertionError(f"unexpected command: {args}")
+
+        def fake_opener(request: object, timeout: float = 2.0) -> object:
+            raise URLError("timed out")
+
+        guard = ProxyEnvironmentGuard(
+            env={},
+            platform="darwin",
+            subprocess_runner=fake_runner,
+            opener=fake_opener,
+            cache_seconds=0,
+            socket_paths=(),
+        )
+
+        status = guard.current_status(force=True)
+
+        self.assertFalse(status.ready)
+        self.assertEqual(status.source, "probe")
+        self.assertIn("探针", status.detail)
+
+    def test_proxy_guard_skips_remote_probe_when_local_proxy_not_detected(self) -> None:
+        def fake_runner(args: list[str], timeout: float = 30.0) -> subprocess.CompletedProcess[str]:
+            if args == ["/usr/sbin/scutil", "--proxy"]:
+                return subprocess.CompletedProcess(args, 0, stdout="<dictionary> { HTTPEnable : 0 }", stderr="")
+            if args == ["ps", "aux"]:
+                return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+            raise AssertionError(f"unexpected command: {args}")
+
+        opener_calls: list[object] = []
+
+        def fake_opener(request: object, timeout: float = 2.0) -> object:
+            opener_calls.append(request)
+            raise AssertionError("remote probe should not run when no local proxy is detected")
+
+        guard = ProxyEnvironmentGuard(
+            env={},
+            platform="darwin",
+            subprocess_runner=fake_runner,
+            opener=fake_opener,
+            cache_seconds=0,
+            socket_paths=(),
+        )
+
+        status = guard.current_status(force=True)
+
+        self.assertFalse(status.ready)
+        self.assertEqual(opener_calls, [])
 
 
 class ClaudeCodeHubTests(unittest.TestCase):
@@ -863,6 +994,73 @@ class CodexUsageHubTests(unittest.TestCase):
         self.assertEqual(second["usage"]["status"], "rate_limited")
         self.assertIsNotNone(second["usage"]["next_refresh_at"])
 
+    def test_refresh_usage_marks_proxy_unavailable_without_falsely_expiring_token(self) -> None:
+        self.write_active_auth(
+            "one@example.com",
+            "One",
+            "acct-one",
+            "plus",
+            access_token="access-one",
+        )
+        self.hub.create_account_from_current()
+        self.usage_client.errors["access-one"] = CodexUsageFetchError(
+            "proxy_unavailable",
+            "未检测到代理环境，已跳过外网请求",
+        )
+
+        account = self.hub.refresh_usage("account-1", force=True)
+
+        self.assertEqual(account["usage"]["status"], "proxy_unavailable")
+        self.assertEqual(
+            account["usage"]["error"],
+            "未检测到代理环境，已跳过外网请求",
+        )
+
+    def test_force_refresh_usage_bypasses_backoff_and_recovers_from_old_unauthorized_cache(self) -> None:
+        self.write_active_auth(
+            "one@example.com",
+            "One",
+            "acct-one",
+            "plus",
+            access_token="access-one",
+        )
+        self.hub.create_account_from_current()
+        cache_path = self.paths.accounts_root / "account-1" / "usage_cache.json"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "status": "unauthorized",
+                    "error": "Codex access token 已失效，需要重新登录并更新保存账号",
+                    "next_refresh_at": "2999-01-01T00:00:00+00:00",
+                    "last_attempt_at": "2026-04-04T06:38:52Z",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        self.usage_client.responses["access-one"] = {
+            "five_hour_percent": 1.0,
+            "five_hour_reset_at": "2026-03-30T12:00:00Z",
+            "seven_day_percent": 5.0,
+            "seven_day_reset_at": "2026-04-02T12:00:00Z",
+            "code_review_seven_day_percent": 0.0,
+            "code_review_seven_day_reset_at": "2026-04-05T12:00:00Z",
+            "plan_type": "plus",
+            "email": "one@example.com",
+            "allowed": True,
+            "limit_reached": False,
+            "credits_balance": "0",
+            "credits_unlimited": False,
+        }
+
+        account = self.hub.refresh_usage("account-1", force=True)
+
+        self.assertEqual(self.usage_client.calls, ["access-one"])
+        self.assertEqual(account["usage"]["status"], "ok")
+        self.assertEqual(account["usage"]["five_hour_percent"], 1.0)
+        self.assertEqual(account["usage"]["seven_day_percent"], 5.0)
+
     def test_saved_usage_cache_preserves_cached_percent_values(self) -> None:
         self.write_active_auth(
             "one@example.com",
@@ -1022,6 +1220,23 @@ class CodexUsageHubTests(unittest.TestCase):
         self.assertEqual(preferences["icon_style"], "double-rings")
         self.assertEqual(preferences["outline_style"], "neutral")
         self.assertEqual([slot["id"] for slot in overview["usage_menu_bar_accounts"]], ["account-2", "account-1"])
+
+    def test_codex_account_without_usage_cache_is_still_menu_bar_eligible(self) -> None:
+        self.write_active_auth(
+            "one@example.com",
+            "One",
+            "acct-one",
+            "plus",
+            access_token="access-one",
+        )
+        created = self.hub.create_account_from_current()
+
+        overview = self.hub.account_overview(created["id"])
+
+        self.assertTrue(overview["snapshot"]["has_access_token"])
+        self.assertTrue(overview["usage_auth"]["configured"])
+        self.assertEqual(overview["usage"]["status"], "not_configured")
+        self.assertTrue(overview["usage_menu_bar_eligible"])
 
 
 class SubprocessClaudeCodeBackendTests(unittest.TestCase):
