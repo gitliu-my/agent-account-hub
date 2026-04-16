@@ -18,6 +18,18 @@ Agent Account Hub 是一个本地多账号切换工具，用来管理不同 CLI 
 - 同一账号的当前认证如果刷新了 token，会自动同步回已保存快照
 - 支持打包成 macOS `.app`
 
+## Tech Stack
+
+- Python 3.11
+- setuptools + `pyproject.toml`
+- `py2app` 打包 macOS `.app`
+- `rumps` 构建 macOS 菜单栏 app
+- `PyObjC` + `AppKit` + `WebKit` 提供原生窗口和内嵌 `WKWebView`
+- Python 标准库 `http.server` 提供本地控制台服务
+- 原生 HTML + CSS + JavaScript 构建控制台界面
+- JSON 文件保存本地状态和账号快照
+- macOS Keychain 保存 Claude Code 相关凭据和 sessionKey
+
 ## Install
 
 ### macOS App
@@ -56,6 +68,10 @@ python3 -m pip install -e .
 ```
 
 ## Usage
+
+详细中文使用文档见：
+
+- [docs/usage-guide.zh-CN.md](docs/usage-guide.zh-CN.md)
 
 ### App
 
