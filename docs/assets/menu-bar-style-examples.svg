@@ -1,0 +1,53 @@
+<svg width="980" height="250" viewBox="0 0 980 250" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="980" height="250" rx="28" fill="#F7F2EA"/>
+  <text x="44" y="54" fill="#3E382F" font-family="SF Pro Display, Inter, Arial, sans-serif" font-size="26" font-weight="700">菜单栏图标样式示意</text>
+  <text x="44" y="84" fill="#756B5D" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="16">示意横向双条 / 双环，以及 Codex 与 Claude 的外框配色风格。</text>
+
+  <rect x="36" y="108" width="908" height="86" rx="18" fill="#303236"/>
+
+  <g transform="translate(76 124)">
+    <rect x="0" y="0" width="116" height="38" rx="11" fill="#3B3E43" stroke="#45C5FF" stroke-width="2.2"/>
+    <rect x="4" y="4" width="108" height="30" rx="9" stroke="#8AD9FF" stroke-opacity="0.95"/>
+    <rect x="16" y="10" width="84" height="7" rx="3.5" fill="#6A7078"/>
+    <rect x="16" y="21" width="84" height="7" rx="3.5" fill="#6A7078"/>
+    <rect x="16" y="10" width="42" height="7" rx="3.5" fill="#36DA72"/>
+    <rect x="16" y="21" width="51" height="7" rx="3.5" fill="#F05B5B"/>
+  </g>
+  <text x="83" y="220" fill="#564D41" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14">Codex · 双条 · 跟随平台</text>
+
+  <g transform="translate(252 124)">
+    <rect x="0" y="0" width="116" height="38" rx="11" fill="#3B3E43" stroke="#E8ECEF" stroke-opacity="0.8" stroke-width="2"/>
+    <circle cx="41" cy="19" r="10" stroke="#E8ECEF" stroke-opacity="0.92" stroke-width="3"/>
+    <circle cx="75" cy="19" r="10" stroke="#E8ECEF" stroke-opacity="0.92" stroke-width="3"/>
+    <path d="M41 9 A10 10 0 0 1 50.4 15.2" stroke="#36DA72" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M75 9 A10 10 0 1 1 65.3 27" stroke="#D7DCE0" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+  <text x="261" y="220" fill="#564D41" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14">Codex · 双环 · 中性浅色</text>
+
+  <g transform="translate(428 124)">
+    <rect x="0" y="0" width="116" height="38" rx="11" fill="#3B3E43" stroke="#FFFFFF" stroke-opacity="0.9" stroke-width="2.2"/>
+    <rect x="16" y="10" width="84" height="7" rx="3.5" fill="#6A7078"/>
+    <rect x="16" y="21" width="84" height="7" rx="3.5" fill="#6A7078"/>
+    <rect x="16" y="10" width="61" height="7" rx="3.5" fill="#36DA72"/>
+    <rect x="16" y="21" width="28" height="7" rx="3.5" fill="#F05B5B"/>
+  </g>
+  <text x="438" y="220" fill="#564D41" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14">Codex · 双条 · 强调对比</text>
+
+  <g transform="translate(604 124)">
+    <rect x="0" y="0" width="116" height="38" rx="11" fill="#3B3E43" stroke="#FF9B2F" stroke-width="2.2"/>
+    <rect x="16" y="10" width="84" height="7" rx="3.5" fill="#6A7078"/>
+    <rect x="16" y="21" width="84" height="7" rx="3.5" fill="#6A7078"/>
+    <rect x="16" y="10" width="35" height="7" rx="3.5" fill="#36DA72"/>
+    <rect x="16" y="21" width="67" height="7" rx="3.5" fill="#F2A74B"/>
+  </g>
+  <text x="610" y="220" fill="#564D41" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14">Claude · 双条 · 跟随平台</text>
+
+  <g transform="translate(780 124)">
+    <rect x="0" y="0" width="116" height="38" rx="11" fill="#3B3E43" stroke="#FFB75C" stroke-width="2.2"/>
+    <circle cx="41" cy="19" r="10" stroke="#FF9B2F" stroke-width="3"/>
+    <circle cx="75" cy="19" r="10" stroke="#FF9B2F" stroke-width="3"/>
+    <path d="M41 9 A10 10 0 1 1 34.4 27" stroke="#36DA72" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M75 9 A10 10 0 0 1 84 14.5" stroke="#FFD28E" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+  <text x="791" y="220" fill="#564D41" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14">Claude · 双环 · 强调对比</text>
+</svg>

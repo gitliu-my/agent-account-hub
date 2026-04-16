@@ -1,0 +1,26 @@
+<svg width="2048" height="170" viewBox="0 0 2048 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="2048" height="170" rx="24" fill="#2D2F33"/>
+  <text x="46" y="70" fill="#A8B0B9" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48" font-weight="600">agent-account-hub</text>
+  <text x="388" y="70" fill="#F1F4F7" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48">│</text>
+  <text x="422" y="70" fill="#4CC3FF" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48" font-weight="700">Opus 4.6</text>
+  <text x="674" y="70" fill="#F1F4F7" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48">│</text>
+  <text x="708" y="70" fill="#FFB85C" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48" font-weight="700">mingyuesix@gmail.com</text>
+  <text x="1326" y="70" fill="#F1F4F7" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48">│</text>
+  <text x="1360" y="70" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48" font-weight="700">Ctx: 0%</text>
+  <text x="1592" y="70" fill="#F1F4F7" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="48">│</text>
+
+  <text x="46" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44" font-weight="700">0%</text>
+  <text x="138" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44">░░</text>
+  <text x="206" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44" font-weight="700">█</text>
+  <text x="240" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44">░░░░░░</text>
+  <text x="478" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44" font-weight="700">→ 15:00</text>
+  <text x="718" y="126" fill="#F1F4F7" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44">│</text>
+
+  <text x="756" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44" font-weight="700">23%</text>
+  <text x="884" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44" font-weight="700">████</text>
+  <text x="1012" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44">│</text>
+  <text x="1046" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44">░░░░░░</text>
+  <text x="1288" y="126" fill="#53E37D" font-family="SFMono-Regular, Menlo, Monaco, Consolas, monospace" font-size="44" font-weight="700">→ 4/20 Mon 17:59</text>
+
+  <text x="46" y="152" fill="#818A94" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="22">Claude Code HUD 预览示意：目录 / 模型 / 账号简称 / 上下文 / 5h 用量 / 7d 用量 / 重置时间</text>
+</svg>

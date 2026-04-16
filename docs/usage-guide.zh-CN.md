@@ -267,6 +267,10 @@ brew upgrade --cask gitliu-my/tap/agent-account-hub
 - `中性浅色`
 - `强调对比`
 
+菜单栏样式示意：
+
+![菜单栏图标样式示意](assets/menu-bar-style-examples.svg)
+
 ### 7.6 如何识别平台和当前活动账号
 
 菜单栏图标里已经做了平台区分：
@@ -385,6 +389,10 @@ Claude Code-credentials
 - `展示项`
 
 预览会随着你的配置修改即时更新，用来模拟 Claude Code 底部状态栏最终会是什么样子。
+
+HUD 预览示意：
+
+![Claude Code HUD 预览示意](assets/claude-statusline-preview.svg)
 
 ### 10.3 可配置的内容
 
