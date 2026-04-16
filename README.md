@@ -130,6 +130,8 @@ agent-account-hub switch account-1
 agent-account-hub clear account-1
 ```
 
+切换账号后，如果对应的 `Codex` 或 `Claude Code` 进程在切换前就已经开着，建议关闭并重新打开一次，避免旧会话或旧缓存继续生效。
+
 切到 Claude Code：
 
 ```bash
