@@ -9,6 +9,14 @@ Agent Account Hub 是一个本地多账号切换工具，用来管理不同 CLI 
 
 它只处理当前 provider 真正使用的认证载体和 Hub 自己保存的快照，不会改你的 session、history、config 或其他数据目录。
 
+运行前请先确保系统已经处于可用代理环境中，例如已开启系统代理或 Clash Verge 的 TUN 模式。
+
+说明：
+
+- 应用本地界面和账号快照管理可以在无代理时打开
+- 但只要涉及外部接口的功能，例如用量查询、自动刷新、菜单栏最新状态同步、Claude HUD 用量刷新，都应在代理环境下运行
+- 如果未检测到代理环境，应用会主动暂停这些外部请求，并显示 `proxy_unavailable` 或“当前未检测到代理环境”
+
 ## Features
 
 - Web 控制台，优先展示当前账号和已保存账号列表
@@ -87,6 +95,8 @@ open "$HOME/Applications/Agent Account Hub.app"
 open "/Applications/Agent Account Hub.app"
 ```
 
+建议先开启代理环境后再启动应用，这样首次读取用量、菜单栏自动刷新和 Claude / Codex 的外部状态请求才能正常工作。
+
 ### Web
 
 ```bash
@@ -99,11 +109,15 @@ agent-account-hub serve
 http://127.0.0.1:8766
 ```
 
+如果你是通过本地控制台使用，也建议先开启代理环境；否则只有纯本地账号管理相关功能可用，外部用量查询会被暂停。
+
 ### Tray
 
 ```bash
 agent-account-hub tray
 ```
+
+菜单栏模式尤其依赖代理环境，因为它会按周期刷新外部用量状态；如果没有代理，图标仍可显示，但联网刷新会暂停。
 
 ### CLI
 
