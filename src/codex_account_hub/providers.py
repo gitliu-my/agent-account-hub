@@ -966,7 +966,7 @@ def parse_claude_usage_percent(value: Any) -> float | None:
         return None
     if isinstance(value, (int, float)):
         numeric = float(value)
-        if isinstance(value, float) and 0.0 <= numeric <= 1.0:
+        if isinstance(value, float) and 0.0 <= numeric < 1.0:
             numeric *= 100.0
     elif isinstance(value, str):
         cleaned = value.strip().replace("%", "")
@@ -976,7 +976,7 @@ def parse_claude_usage_percent(value: Any) -> float | None:
             numeric = float(cleaned)
         except ValueError:
             return None
-        if 0.0 <= numeric <= 1.0 and "." in cleaned:
+        if 0.0 <= numeric < 1.0 and "." in cleaned:
             numeric *= 100.0
     else:
         return None

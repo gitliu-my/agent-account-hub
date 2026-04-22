@@ -30,6 +30,7 @@ from codex_account_hub.providers import (
     ProxyEnvironmentGuard,
     SubprocessClaudeCodeBackend,
     UnifiedAuthHub,
+    parse_claude_usage_percent,
 )
 
 
@@ -321,6 +322,18 @@ class ProxyGuardTests(unittest.TestCase):
 
         self.assertFalse(status.ready)
         self.assertEqual(opener_calls, [])
+
+
+class UsagePercentParsingTests(unittest.TestCase):
+    def test_claude_usage_percent_keeps_one_percent_values(self) -> None:
+        self.assertEqual(parse_claude_usage_percent(1), 1.0)
+        self.assertEqual(parse_claude_usage_percent(1.0), 1.0)
+        self.assertEqual(parse_claude_usage_percent("1"), 1.0)
+        self.assertEqual(parse_claude_usage_percent("1.0"), 1.0)
+
+    def test_claude_usage_percent_still_accepts_ratio_values_below_one(self) -> None:
+        self.assertEqual(parse_claude_usage_percent(0.01), 1.0)
+        self.assertEqual(parse_claude_usage_percent("0.01"), 1.0)
 
 
 class ClaudeCodeHubTests(unittest.TestCase):
