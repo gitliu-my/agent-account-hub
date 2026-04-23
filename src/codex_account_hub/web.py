@@ -8,6 +8,7 @@ from typing import Any
 
 from .core import AuthHubError
 from .providers import UnifiedAuthHub, normalize_provider_name
+from .update_checker import check_for_updates
 
 
 INDEX_HTML = """<!doctype html>
@@ -1915,6 +1916,7 @@ INDEX_HTML = """<!doctype html>
             <div class="provider-status-row">
               <div id="sync-pill" class="sync-pill">正在读取状态</div>
               <button id="refresh-button" class="button secondary compact" type="button" title="重新读取当前平台的状态、已保存账号和配置">同步</button>
+              <button id="check-update-button" class="button secondary compact" type="button" title="检查 GitHub Release 中是否有新版本">检查更新</button>
             </div>
           </div>
         </div>
@@ -4257,11 +4259,28 @@ INDEX_HTML = """<!doctype html>
     }
 
     async function switchSlot(slotId) {
+      if (selectedProvider === "claude-code") {
+        const warning = [
+          "Claude Code 切号提醒：",
+          "",
+          "切换认证后，不建议在原来的 Claude Code 会话里继续提问。",
+          "旧会话的完整上下文可能会随下一次请求计入新账号用量，导致新账号用量立刻大幅上涨。",
+          "",
+          "建议切换后重启 Claude Code，或新开一个干净会话再继续。仍要现在切换吗？"
+        ].join("\\n");
+        if (!window.confirm(warning)) {
+          return;
+        }
+      }
       await request(providerActionPath("/accounts/" + encodeSlotId(slotId) + "/switch"), {
         method: "POST",
         body: "{}"
       });
-      flash("已切换到所选账号");
+      flash(
+        selectedProvider === "claude-code"
+          ? "已切换认证。建议重启 Claude Code 或新开会话后再继续。"
+          : "已切换到所选账号"
+      );
       await refreshState({ quiet: true });
     }
 
@@ -4475,8 +4494,51 @@ INDEX_HTML = """<!doctype html>
       }
     }
 
+    function updateCheckSummary(payload) {
+      const current = payload.current_tag || ("v" + (payload.current_version || "—"));
+      const latest = payload.latest_tag || (payload.latest_version ? "v" + payload.latest_version : "—");
+      if (payload.status === "update_available") {
+        return "发现新版本 " + latest + "，当前版本 " + current + "。";
+      }
+      if (payload.status === "up_to_date") {
+        return "当前已经是最新版本 " + current + "。";
+      }
+      return payload.error || "检查更新失败";
+    }
+
+    async function checkForUpdates(button) {
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "检查中";
+      try {
+        const payload = await request("/api/app/update-check", {
+          method: "POST",
+          body: "{}"
+        });
+        const summary = updateCheckSummary(payload);
+        if (payload.status === "update_available") {
+          const message = summary + "\\n\\nHomebrew 更新命令：\\n" + payload.brew_command + "\\n\\n是否打开发布页面？";
+          if (window.confirm(message) && payload.release_url) {
+            window.open(payload.release_url, "_blank", "noopener");
+          }
+          flash("发现新版本 " + (payload.latest_tag || payload.latest_version));
+          return;
+        }
+        flash(summary, payload.status !== "up_to_date");
+      } catch (error) {
+        flash(error.message, true);
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
     document.getElementById("refresh-button").addEventListener("click", () => {
       refreshState().catch(() => {});
+    });
+
+    document.getElementById("check-update-button").addEventListener("click", (event) => {
+      checkForUpdates(event.currentTarget);
     });
 
     document.getElementById("refresh-usage-button").addEventListener("click", (event) => {
@@ -4915,6 +4977,11 @@ class AuthHubRequestHandler(BaseHTTPRequestHandler):
                 self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             self._send_json(payload)
+            return
+
+        if self.path == "/api/app/update-check":
+            self._read_json_body()
+            self._send_json(check_for_updates())
             return
 
         provider_create_match = re.fullmatch(r"/api/providers/([^/]+)/accounts/create-from-current", self.path)

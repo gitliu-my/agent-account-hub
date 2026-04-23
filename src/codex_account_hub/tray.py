@@ -10,6 +10,7 @@ from typing import Any
 from .core import AuthHubError
 from .native_window import NativeHubWindow
 from .providers import UnifiedAuthHub, provider_label
+from .update_checker import check_for_updates
 from .ui_helpers import (
     APP_NAME,
     slot_display_label,
@@ -526,6 +527,7 @@ def run_tray(
                     None,
                     rumps.MenuItem("打开控制台", callback=self._open_dashboard),
                     rumps.MenuItem("刷新状态", callback=self._manual_refresh),
+                    rumps.MenuItem("检查更新", callback=self._check_for_updates),
                     rumps.MenuItem("退出", callback=self._quit),
                 ]
             )
@@ -602,6 +604,7 @@ def run_tray(
                         None,
                         rumps.MenuItem("刷新状态", callback=self._manual_refresh),
                         rumps.MenuItem("打开控制台", callback=self._open_dashboard),
+                        rumps.MenuItem("检查更新", callback=self._check_for_updates),
                         rumps.MenuItem("退出", callback=self._quit),
                     ]
                 )
@@ -627,6 +630,7 @@ def run_tray(
                         None,
                         rumps.MenuItem("刷新状态", callback=self._manual_refresh),
                         rumps.MenuItem("打开控制台", callback=self._open_dashboard),
+                        rumps.MenuItem("检查更新", callback=self._check_for_updates),
                         rumps.MenuItem("退出", callback=self._quit),
                     ]
                 )
@@ -687,6 +691,7 @@ def run_tray(
                     None,
                     rumps.MenuItem("打开控制台", callback=self._open_dashboard),
                     rumps.MenuItem("刷新状态", callback=self._manual_refresh),
+                    rumps.MenuItem("检查更新", callback=self._check_for_updates),
                     rumps.MenuItem("退出", callback=self._quit),
                 ]
             )
@@ -833,6 +838,27 @@ def run_tray(
             self._set_loading_menu("正在刷新状态…")
             self._start_background_refresh(force=True)
 
+        def _check_for_updates(self, _sender: Any) -> None:
+            result = check_for_updates()
+            current = result.get("current_tag") or f"v{result.get('current_version') or '—'}"
+            latest = result.get("latest_tag") or (
+                f"v{result.get('latest_version')}" if result.get("latest_version") else "—"
+            )
+            if result.get("status") == "update_available":
+                message = (
+                    f"当前版本：{current}\n"
+                    f"最新版本：{latest}\n\n"
+                    f"Homebrew 更新命令：\n{result.get('brew_command')}"
+                )
+                response = rumps.alert("发现新版本", message, ok="打开发布页", cancel="稍后")
+                if response == 1 and result.get("release_url"):
+                    webbrowser.open(str(result["release_url"]))
+                return
+            if result.get("status") == "up_to_date":
+                rumps.alert("已是最新版本", f"当前版本：{current}")
+                return
+            rumps.alert("检查更新失败", str(result.get("error") or "未知错误"))
+
         def _create_new_account(self, provider: str):
             def callback(_sender: Any) -> None:
                 try:
@@ -922,13 +948,26 @@ def run_tray(
 
         def _switch_slot(self, provider: str, slot_id: str, slot_label: str):
             def callback(_sender: Any) -> None:
+                if provider == "claude-code":
+                    warning = (
+                        "切换认证后，不建议在原来的 Claude Code 会话里继续提问。\n\n"
+                        "旧会话的完整上下文可能会随下一次请求计入新账号用量，"
+                        "导致新账号用量立刻大幅上涨。\n\n"
+                        "建议切换后重启 Claude Code，或新开一个干净会话再继续。"
+                    )
+                    response = rumps.alert("Claude Code 切号提醒", warning, ok="继续切换", cancel="取消")
+                    if response != 1:
+                        return
                 try:
                     hub.switch(provider, slot_id)
                 except AuthHubError as exc:
                     rumps.alert("切换失败", str(exc))
                     return
 
-                self._notify(APP_NAME, "切换成功", f"{provider_label(provider)} 已切换到 {slot_label}")
+                message = f"{provider_label(provider)} 已切换到 {slot_label}"
+                if provider == "claude-code":
+                    message = f"{message}。建议重启 Claude Code 或新开会话。"
+                self._notify(APP_NAME, "切换成功", message)
                 self._start_background_refresh(force=True)
 
             return callback

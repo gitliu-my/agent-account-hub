@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 import sys
+import tomllib
+from pathlib import Path
 
 from setuptools import find_packages, setup
 
 
 APP = ["scripts/CodexAccountHubTray.py"]
+
+
+def project_version() -> str:
+    with Path(__file__).with_name("pyproject.toml").open("rb") as handle:
+        payload = tomllib.load(handle)
+    return str(payload["project"]["version"])
+
+
+PROJECT_VERSION = project_version()
 OPTIONS = {
     "argv_emulation": False,
     "iconfile": "assets/AgentAccountHub.icns",
@@ -13,6 +24,8 @@ OPTIONS = {
         "CFBundleName": "Agent Account Hub",
         "CFBundleDisplayName": "Agent Account Hub",
         "CFBundleIdentifier": "dev.codex.agentaccounthub",
+        "CFBundleShortVersionString": PROJECT_VERSION,
+        "CFBundleVersion": PROJECT_VERSION,
         "LSUIElement": True,
         "NSAppTransportSecurity": {
             "NSAllowsLocalNetworking": True,
@@ -50,5 +63,6 @@ setup(
     options=options,
     package_dir={"": "src"},
     packages=find_packages("src"),
+    version=PROJECT_VERSION,
     **extra_setup_kwargs,
 )
